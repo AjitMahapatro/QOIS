@@ -1,96 +1,181 @@
-// services/jobWorker.js — FULLY UPDATED FOR IBM QUANTUM RUNTIME V2
-
 import Job from "../models/Job.js";
-import { getJobStatusFromIBM } from "./ibmService.js";
 import { emitJobUpdate } from "../utils/socket.js";
+import {
+  refreshRuntimeJob,
+  submitRuntimeJob,
+} from "./qiskitBridge.js";
 
 const POLLING_INTERVAL = 10000;
+const MAX_RETRIES = 1;
 
-function mapIBMStatus(status) {
-  if (!status) return "failed";
-  const s = status.toLowerCase();
-  if (s.includes("queued")) return "queued";
-  if (s.includes("running") || s.includes("executing")) return "running";
-  if (s.includes("completed") || s.includes("finished")) return "completed";
-  if (s.includes("failed") || s.includes("error")) return "failed";
-  return "running";
+function mapRuntimeStatus(status) {
+  const normalized = String(status || "").toUpperCase();
+
+  if (normalized === "DONE") return "completed";
+  if (normalized === "ERROR") return "failed";
+  if (normalized === "CANCELLED") return "cancelled";
+  if (normalized === "RUNNING") return "running";
+  if (normalized === "QUEUED") return "queued";
+
+  return "pending";
 }
 
-function extractIBMResult(ibm) {
-  const result = { raw: ibm };
-
-  if (ibm?.state?.reason) {
-    result.type = "error";
-    result.error = ibm.state.reason;
-    return result;
+async function retryOrFallback(job, reason, logs) {
+  if ((job.retryCount || 0) >= MAX_RETRIES) {
+    job.status = "failed";
+    job.failureInfo = {
+      reason: reason || "IBM Runtime returned an ERROR state.",
+      logs: logs || "",
+      suggestion:
+        "Retry on a different backend or inspect the runtime logs for circuit issues.",
+      backend: job.backend,
+    };
+    await job.save();
+    emitJobUpdate("jobFailed", job);
+    return;
   }
 
-  const pubResult = ibm?.results?.[0]; 
-  if (!pubResult?.data) return result;
+  const retryAttempt = (job.retryCount || 0) + 1;
 
-  const data = pubResult.data;
+  try {
+    const retry = await submitRuntimeJob({
+      qasm: job.rawQASM,
+      backend: null,
+      shots: job.shots,
+      circuitType: job.circuitType,
+      allowFallback: true,
+      excludeBackends: [job.backend].filter(Boolean),
+    });
 
-  // SamplerV2: Find register name containing samples (e.g., "c" or "meas") 
-  const regName = Object.keys(data).find(key => data[key].samples || Array.isArray(data[key]));
+    job.retryCount = retryAttempt;
+    job.retryHistory = [
+      ...(job.retryHistory || []),
+      {
+        attemptedAt: new Date(),
+        previousBackend: job.backend,
+        reason,
+      },
+    ];
 
-  if (regName) {
-    result.type = "sampler";
-    const samples = data[regName].samples || data[regName]; 
-    
-    // Convert bitstring list to Counts for dashboard visualization 
-    result.counts = samples.reduce((acc, val) => {
-      acc[val] = (acc[val] || 0) + 1;
-      return acc;
-    }, {});
-    
-    result.metadata = pubResult.metadata || {};
-    return result;
+    if (retry.status === "completed" && retry.mode === "simulator") {
+      job.status = "completed";
+      job.ibmJobId = null;
+      job.backend = retry.backend || "aer_simulator";
+      job.runMode = "simulator";
+      job.ibmResult = retry.result;
+      job.transpiledDepth = retry.transpiledDepth ?? job.transpiledDepth;
+      job.failureInfo = {
+        reason,
+        logs: logs || retry.logs || "",
+        suggestion: retry.suggestion,
+        fallbackUsed: true,
+      };
+      job.runtimeInfo = {
+        ...(job.runtimeInfo || {}),
+        executionMode: retry.mode,
+        lastStatus: "DONE",
+        warnings: retry.warnings || [],
+      };
+      await job.save();
+      emitJobUpdate("jobCompleted", job);
+      return;
+    }
+
+    job.ibmJobId = retry.jobId;
+    job.backend = retry.backend || job.backend;
+    job.status = mapRuntimeStatus(retry.status);
+    job.runMode = "hardware";
+    job.transpiledDepth = retry.transpiledDepth ?? job.transpiledDepth;
+    job.failureInfo = {
+      reason,
+      logs: logs || "",
+      suggestion: "The job was retried automatically on a different backend.",
+      retried: true,
+    };
+    job.runtimeInfo = {
+      ...(job.runtimeInfo || {}),
+      executionMode: retry.mode,
+      lastStatus: retry.status,
+      warnings: retry.warnings || [],
+      backendSummary: retry.backendSummary || null,
+    };
+    await job.save();
+    emitJobUpdate("jobUpdated", job);
+  } catch (error) {
+    job.status = "failed";
+    job.retryCount = retryAttempt;
+    job.failureInfo = {
+      reason,
+      logs: logs || "",
+      suggestion:
+        "Automatic retry also failed. Inspect the runtime bridge error details.",
+      bridgeError: error.details?.traceback || error.message,
+    };
+    await job.save();
+    emitJobUpdate("jobFailed", job);
   }
-
-  return result;
 }
 
 const runJobWorker = async () => {
   try {
     const jobs = await Job.find({ status: { $in: ["queued", "running"] } });
 
-    if (!jobs.length) return;
-
     for (const job of jobs) {
       if (!job.ibmJobId) {
-        job.status = "failed";
-        await job.save();
-        emitJobUpdate("jobFailed", job);
+        await retryOrFallback(
+          job,
+          "Missing IBM Runtime job identifier for a queued/running job.",
+          ""
+        );
         continue;
       }
 
       try {
-        const ibm = await getJobStatusFromIBM(job.ibmJobId);
-        const ibmStatus = ibm?.state?.status;
-        if (!ibmStatus) continue;
+        const runtime = await refreshRuntimeJob({ jobId: job.ibmJobId });
+        const mappedStatus = mapRuntimeStatus(runtime.status);
 
-        const mappedStatus = mapIBMStatus(ibmStatus);
+        job.runtimeInfo = {
+          ...(job.runtimeInfo || {}),
+          lastStatus: runtime.status,
+          metrics: runtime.metrics || null,
+          usage: runtime.usage || null,
+        };
+
+        if (mappedStatus === "completed") {
+          job.status = "completed";
+          job.ibmResult = runtime.result || job.ibmResult;
+          job.failureInfo = null;
+          await job.save();
+          emitJobUpdate("jobCompleted", job);
+          continue;
+        }
+
+        if (mappedStatus === "failed" || mappedStatus === "cancelled") {
+          await retryOrFallback(
+            job,
+            runtime.reason || runtime.errorMessage || `Runtime ended in ${runtime.status}.`,
+            runtime.logs || ""
+          );
+          continue;
+        }
 
         if (mappedStatus !== job.status) {
           job.status = mappedStatus;
-
-          if (mappedStatus === "completed" || mappedStatus === "failed") {
-            job.ibmResult = extractIBMResult(ibm);
-            emitJobUpdate(mappedStatus === "completed" ? "jobCompleted" : "jobFailed", job);
-          } else {
-            emitJobUpdate("jobUpdated", job);
-          }
+          await job.save();
+          emitJobUpdate("jobUpdated", job);
+        } else {
           await job.save();
         }
-      } catch (err) {
-        job.status = "failed";
-        job.ibmResult = { type: "error", message: err.message };
-        await job.save();
-        emitJobUpdate("jobFailed", job);
+      } catch (error) {
+        await retryOrFallback(
+          job,
+          error.details?.error || error.message || "Runtime refresh failed.",
+          error.details?.traceback || error.stderr || ""
+        );
       }
     }
-  } catch (err) {
-    console.error("FATAL JOB WORKER ERROR:", err.message);
+  } catch (error) {
+    console.error("FATAL JOB WORKER ERROR:", error.message);
   }
 };
 

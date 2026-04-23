@@ -69,6 +69,31 @@ const JobSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.Mixed,
       default: null,
     },
+
+    runtimeInfo: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
+    failureInfo: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
+    validationInfo: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
+    transpiledDepth: {
+      type: Number,
+      default: null,
+    },
+    retryCount: {
+      type: Number,
+      default: 0,
+    },
+    retryHistory: {
+      type: [mongoose.Schema.Types.Mixed],
+      default: [],
+    },
   },
   {
     timestamps: true,

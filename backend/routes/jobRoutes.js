@@ -17,7 +17,7 @@ import {
 
   getBackendsList// Endpoint to retrieve results from MongoDB
   // We remove 'deleteJob' because it was not implemented/exported.
-} from '../controllers/JobController.js'; 
+} from '../controllers/jobController.js'; 
 
 // --- Protected Job Endpoints (Requires Authentication) ---
 
@@ -29,12 +29,13 @@ router.post('/', protect, createJob);
 // Purpose: Get the list of jobs (filtered by user or all for admin)
 router.get('/', protect, getJobs);
 
+// GET /api/jobs/backends
+router.get('/backends', protect, getBackendsList);
+
 // GET /api/jobs/:id
 // Purpose: Get full details for one specific job
 router.get('/:id', protect, getJob);
 
-// GET /api/jobs/backends
-router.get('/backends', protect, getBackendsList);
 // POST /api/jobs/:id/submit
 // Purpose: Submits a 'pending' job to the IBM Cloud API
 router.post('/:id/submit', protect, submitJobToIBM);

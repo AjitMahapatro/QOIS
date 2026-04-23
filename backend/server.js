@@ -19,7 +19,7 @@ import express from 'express';
 import http from 'http';
 import connectDB from './config/db.js';
 import { initializeSocketIO } from './utils/socket.js';
-import { startWorker } from './services/jobworker.js';
+import { startWorker } from './services/jobWorker.js';
 
 // --------------------------------------------------------
 // 3. 🔑 Passport & Security Imports

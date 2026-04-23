@@ -3,7 +3,7 @@
 import express from 'express'; // <-- CRITICAL FIX: Use import instead of require()
 const router = express.Router();
 
-import { getBackendsList } from '../controllers/JobController.js'; 
+import { getBackendsList } from '../controllers/jobController.js'; 
 
 // --- Public Backend Endpoint ---
 

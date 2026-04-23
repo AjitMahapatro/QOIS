@@ -38,16 +38,13 @@ const handleJsonResponse = async (res) => {
 // 1. Fetch IBM Backends
 // ---------------------------------------------------------
 export async function fetchBackends() {
-  const res = await fetch(
-    `https://quantum-jobs-tracker-l3jz.onrender.com/api/backends`,
-    {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        ...authHeaders(),
-      },
-    }
-  );
+  const res = await fetch(`${API_BASE_URL}/backends`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders(),
+    },
+  });
   const json = await handleJsonResponse(res);
 
   if (Array.isArray(json.data?.devices)) return json.data.devices;
@@ -113,7 +110,7 @@ export async function getJobStatus(jobId) {
     },
   });
   const json = await handleJsonResponse(res);
-  return json.data;
+  return json.data || { status: json.status };
 }
 
 // ---------------------------------------------------------
@@ -128,5 +125,5 @@ export async function getJobResults(jobId) {
     },
   });
   const json = await handleJsonResponse(res);
-  return json.data;
+  return json.data || json.results;
 }
