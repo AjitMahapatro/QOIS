@@ -2,6 +2,7 @@
 # Node modules
 # -------------------------
 node_modules/
+**/node_modules/
 
 # -------------------------
 # Environment variables
@@ -11,7 +12,39 @@ node_modules/
 **/.env
 **/.env.*
 backend/.env
-frontend-old/.env
+frontend/.env
+
+# -------------------------
+# Build folders
+# -------------------------
+dist/
+build/
+**/dist/
+**/build/
+
+# -------------------------
+# Logs
+# -------------------------
+logs/
+*.log
+**/logs/
+
+# -------------------------
+# OS / System files
+# -------------------------
+.DS_Store
+Thumbs.db
+
+# -------------------------
+# IDE
+# -------------------------
+.vscode/
+
+# -------------------------
+# Package lock files (optional - keep if needed)
+# -------------------------
+# package-lock.json
+# **/package-lock.json
 
 # -------------------------
 # Build folders
