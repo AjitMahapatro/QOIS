@@ -440,6 +440,37 @@ html, body {
   animation: titleShimmer 6s linear infinite;
 }
 /* 🧾 SUBTITLE — COOL CYAN TONE */
+.qd-reco-score {
+  color: #38bdf8;
+  font-weight: 600;
+  font-size: 12px;
+  margin-top: 4px;
+  background: rgba(56, 189, 248, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border-left: 3px solid #38bdf8;
+}
+
+.qd-reco-fidelity {
+  color: #10b981;
+  font-weight: 500;
+  font-size: 11px;
+  margin-left: 8px;
+}
+
+.qd-reco-check {
+  color: #22c55e;
+  font-size: 10px;
+  margin-right: 6px;
+}
+
+.qd-reco-reasons {
+  margin-top: 8px;
+  font-size: 11px;
+  color: #94a3b8;
+  line-height: 1.4;
+}
+
 .qd-card-header-bar .qd-card-sub {
   font-size: 12px;
   margin-top: 4px;
@@ -524,22 +555,9 @@ html, body {
   padding: 6px 8px;
   border-radius: 999px;
   border: 1px solid rgba(148,163,255,0.7);
-  background: #020617;
-  color: #ffffff;
+  background: black;
+  color: var(--qd-text-dark);
   font-size: 12px;
-}
-.qd-filter-select {
-  appearance: none;
-  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
-  background-repeat: no-repeat;
-  background-position: right 6px center;
-  background-size: 14px;
-  padding-right: 24px;
-}
-.qd-filter-select option {
-  background: #1e293b;
-  color: #ffffff;
-  padding: 6px;
 }
 .qd-filter-input::placeholder {
   color: #9ca3af;
@@ -1239,9 +1257,51 @@ html, body {
 const API_BASE = "https://quantum-jobs-tracker-l3jz.onrender.com/api";
 
 function computeScore(b) {
-  const qubitScore = b.qubits || 0;
-  const queueScore = b.queue > 0 ? 1000 / (1 + b.queue) : 1000;
-  return qubitScore * 2 + queueScore;
+  // Basic scores
+  const qubitScore = (b.qubits || 0) * 0.15;
+  const queueScore = b.queue > 0 ? 1000 / (1 + b.queue) * 0.15 : 1000 * 0.15;
+  
+  // Hardware quality scores
+  const fidelityScore = b.fidelity ? (b.fidelity / 100) * 0.25 : 0;
+  const connectivityScore = b.connectivity ? (b.connectivity / 10) * 0.15 : 0;
+  const errorScore = b.error_rate ? (1 - b.error_rate) * 0.20 : 0.20;
+  const availabilityScore = b.status === 'online' ? 0.10 : 0;
+  
+  // Circuit awareness scores
+  const depthScore = b.max_depth ? (1 - b.max_depth / 1000) * 0.10 : 0;
+  const volumeScore = b.quantum_volume || 0 * 0.05;
+  
+  return qubitScore + queueScore + fidelityScore + connectivityScore + errorScore + availabilityScore + depthScore + volumeScore;
+}
+
+function computeAdvancedScore(b, circuitRequirements = {}) {
+  const baseScore = computeScore(b);
+  
+  // Circuit-specific adjustments
+  let suitabilityMultiplier = 1.0;
+  
+  if (circuitRequirements.qubits && b.qubits) {
+    if (circuitRequirements.qubits > b.qubits) {
+      suitabilityMultiplier *= 0.1; // Heavy penalty for insufficient qubits
+    } else if (circuitRequirements.qubits <= b.qubits * 0.5) {
+      suitabilityMultiplier *= 1.2; // Bonus for efficient qubit usage
+    }
+  }
+  
+  if (circuitRequirements.depth && b.max_depth) {
+    if (circuitRequirements.depth > b.max_depth * 0.8) {
+      suitabilityMultiplier *= 0.7; // Penalty for deep circuits
+    }
+  }
+  
+  if (circuitRequirements.cx_gates && b.connectivity) {
+    const connectivityRatio = b.connectivity / circuitRequirements.cx_gates;
+    if (connectivityRatio < 0.5) {
+      suitabilityMultiplier *= 0.8; // Penalty for poor connectivity
+    }
+  }
+  
+  return baseScore * suitabilityMultiplier;
 }
 
 const REGION_MAP = {
@@ -1561,9 +1621,17 @@ export default function Dashboard() {
     }
   }, [backends]);
 
-  // Recommendation
+  // Enhanced Recommendation with Circuit Awareness
   const recommendation = filtered.length
-    ? [...filtered].sort((a, b) => computeScore(b) - computeScore(a))[0]
+    ? [...filtered].sort((a, b) => computeAdvancedScore(b, {
+        qubits: minQubits || 1,
+        depth: 50, // Default estimated depth
+        cx_gates: 10 // Default estimated CX gates
+      }) - computeAdvancedScore(a, {
+        qubits: minQubits || 1,
+        depth: 50,
+        cx_gates: 10
+      }))[0]
     : null;
 
   // details + analytics queries for selected backend
@@ -1865,45 +1933,93 @@ export default function Dashboard() {
                         <option value="score">AI Score</option>
                       </select>
                     </div>
-                    <div
-                      className="qd-filter-group"
-                      style={{ flex: 1, minWidth: 180 }}
-                    >
-                      <label>Search backend</label>
-                      <input
-                        className="qd-filter-input"
-                        placeholder="Search by name..."
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                      />
-                    </div>
-                  </div>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={filtered}>
+                  <CartesianGrid stroke="#3b3b74" strokeDasharray="4 4" />
+                  <XAxis dataKey="name" stroke="currentColor" />
+                  <YAxis stroke="currentColor" />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Bar dataKey="queue" fill="#fb3cf8f7" radius={[7, 7, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </motion.div>
 
-                  {recommendation ? (
-                    <>
-                      <p className="qd-reco-main">
-                        Recommended: <strong>{recommendation.name}</strong>
-                      </p>
-                      <p className="qd-reco-meta">
-                        {recommendation.qubits} qubits • queue {recommendation.queue} •{" "}
-                        {recommendation.type}
-                      </p>
-                    </>
-                  ) : (
-                    <p style={{ marginTop: 12, fontSize: 12 }}>
-                      No backend matches filters.
-                    </p>
-                  )}
-
-                  <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
-                    <button className="qd-export-btn" onClick={handleExport}>
-                      Export Backend Report (JSON)
-                    </button>
+          {/* AI Recommendation + Filters */}
+          <motion.div
+            className="qd-card"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.05 }}
+          >
+            {/* NEW HEADER BAR IMPLEMENTATION */}
+            <div className="qd-card-header-bar">
+              <div className="qd-card-header">
+                <div>
+                  <div className="qd-card-title">QID Backend Recommendation</div>
+                  <div className="qd-card-sub">
+                    Scoring based on qubits, queue, and load balance
                   </div>
-                </motion.div>
+                </div>
+                <div className="qd-ai-pill" style={{marginTop: 0}}>
+                  <span className="qd-ai-dot" />
+                  QID OPTIMIZED
+                </div>
               </div>
+            </div>
+            {/* END NEW HEADER BAR */}
 
-              {/* MID ROW: All Backends Card Grid */}
+            <div className="qd-filter-row" style={{ marginTop: '0px' }}>
+              <div className="qd-filter-group">
+                <label>Min qubits</label>
+                <input
+                  className="qd-filter-input"
+                  type="number"
+                  value={minQubits}
+                  onChange={(e) => setMinQubits(Number(e.target.value))}
+                />
+              </div>
+              <div className="qd-filter-group">
+                <label>Max queue</label>
+                <input
+                  className="qd-filter-input"
+                  type="number"
+                  placeholder="no limit"
+                  value={maxQueue ?? ""}
+                  onChange={(e) =>
+                    setMaxQueue(
+                      e.target.value === "" ? null : Number(e.target.value)
+                    )
+                  }
+                />
+              </div>
+              <div className="qd-filter-group">
+                <label>Type</label>
+                <select
+                  className="qd-filter-select"
+                  value={typeFilter}
+                  onChange={(e) => setTypeFilter(e.target.value)}
+                >
+                  <option value="all">All</option>
+                  <option value="hardware">Hardware</option>
+                  <option value="simulator">Simulator</option>
+                </select>
+              </div>
+              <div className="qd-filter-group">
+                <label>Sort by</label>
+                <select
+                  className="qd-filter-select"
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                >
+                  <option value="queue">Queue (low → high)</option>
+                  <option value="qubits">Qubits (high → low)</option>
+                  <option value="score">AI Score</option>
+                </select>
+              </div>
+              <div
+                className="qd-filter-group"
+                style={{ flex: 1, minWidth: 180 }}
               <motion.div
                 className="qd-card"
                 style={{ marginBottom: 22 }}
