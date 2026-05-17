@@ -36,7 +36,6 @@ import session from 'express-session';
 import authRoutes from './routes/authRoutes.js';
 import jobRoutes from './routes/jobRoutes.js';
 import backendRoutes from './routes/backendRoutes.js';
-import advancedRecommendationRoutes from './routes/advancedRecommendationRoutes.js';
 
 // --------------------------------------------------------
 // 5. Initialize Express Application
@@ -103,7 +102,6 @@ initializeSocketIO(server);
 app.use('/api/auth', authRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/backends', backendRoutes);
-app.use('/api/recommendations', advancedRecommendationRoutes);
 
 // --------------------------------------------------------
 // 11. Basic Health Route

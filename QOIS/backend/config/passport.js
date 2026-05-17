@@ -7,11 +7,14 @@ passport.use(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: `${process.env.BE_BASE_URL}/api/auth/google/callback`
+
+      callbackURL:
+        process.env.NODE_ENV === "production"
+          ? "https://qois-backend.onrender.com/api/auth/google/callback"
+          : "http://localhost:5000/api/auth/google/callback",
     },
 
     async (accessToken, refreshToken, profile, done) => {
-
       try {
 
         const email = profile.emails[0].value;
@@ -26,11 +29,11 @@ passport.use(
 
         if (user) {
 
-          // Link googleId if missing
-          if (!user.googleId) user.googleId = profile.id;
+          if (!user.googleId)
+            user.googleId = profile.id;
 
-          // Update profile picture
-          if (!user.profilePicture) user.profilePicture = picture;
+          if (!user.profilePicture)
+            user.profilePicture = picture;
 
           await user.save();
 
@@ -46,23 +49,26 @@ passport.use(
           });
 
           return done(null, newUser);
-
         }
 
       } catch (error) {
-        done(error, null);
+        return done(error, null);
       }
-
     }
   )
 );
-
 
 passport.serializeUser((user, done) => {
   done(null, user.id);
 });
 
 passport.deserializeUser(async (id, done) => {
-  const user = await User.findById(id);
-  done(null, user);
+  try {
+    const user = await User.findById(id);
+    done(null, user);
+  } catch (error) {
+    done(error, null);
+  }
 });
+
+export default passport;
