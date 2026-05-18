@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 
-const FINISH_AFTER_MS = 2000;
+const FINISH_AFTER_MS = 5000;
 
 export default function QuantumPreloader({ onFinish }) {
   const [hide, setHide] = useState(false);
