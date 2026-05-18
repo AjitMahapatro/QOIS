@@ -11,7 +11,7 @@ passport.use(
       callbackURL:
         process.env.NODE_ENV === "production"
           ? "https://qois-backend.onrender.com/api/auth/google/callback"
-          : "http://localhost:5000/auth/google/api/callback",
+          : "http://localhost:5000/api/auth/google/callback",
     },
 
     async (accessToken, refreshToken, profile, done) => {
