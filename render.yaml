@@ -1,5 +1,4 @@
 services:
-  # Backend Service
   - type: web
     name: quantum-backend
     env: node
