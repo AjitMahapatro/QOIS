@@ -333,7 +333,3 @@ In the current branch, the core production path is the job submission and tracki
 
 QOIS is best described as a **quantum operations platform prototype**: part research tool, part execution orchestrator, and part observability dashboard. It already demonstrates a compelling architecture for real-world quantum workload management, and it has enough depth to be presented as more than a basic student CRUD app.
 
-If you want this project to read well on GitHub, on a portfolio, or in a hackathon/demo setting, the strongest story is this:
-
-> QOIS brings software engineering discipline to quantum execution by combining backend orchestration, runtime validation, dashboard observability, and intelligent job lifecycle management in one unified system.
-
