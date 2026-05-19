@@ -2,6 +2,21 @@
 
 **Quantum Operational Intelligence System** is a full-stack platform for submitting, monitoring, and interpreting quantum jobs with IBM Quantum Runtime. It combines a cinematic React frontend, a Node.js orchestration layer, MongoDB-backed persistence, and a Python-Qiskit execution bridge to create a practical workflow for quantum experimentation.
 
+---
+
+### 🏆 Hackathon Recognition & Team
+This project was developed for the **Amaravati Quantum Valley Hackathon (AQVH 2025)** under **Problem Statement: AQVH915 (Theme: Quantum Job Tracker)**, where our 6-member team successfully secured the **State Runner-up (2nd Place)** position.
+
+**Team Members & Contributions:**
+* **Ajit Mahapatro** – *Backend Engineering & Quantum Integration Lead* (Core focus on the Python-Qiskit Runtime Bridge, API logic routing, OpenQASM 3 validation, and the automated result interpretation layer).
+* [Member Name 2] – *Frontend Development & UI Design*
+* [Member Name 3] – *Database Architecture & Schema Design*
+* [Member Name 4] – *State Management & API Integration*
+* [Member Name 5] – *Testing & Quality Assurance*
+* [Member Name 6] – *DevOps & Cloud Deployment*
+
+---
+
 The project is designed around a simple goal: make quantum job execution feel operational, observable, and developer-friendly. Instead of treating circuit submission as a one-off script, QOIS turns it into a tracked lifecycle with authentication, job metadata, backend discovery, status updates, result interpretation, and fallback behavior.
 
 ## Why This Project Stands Out
