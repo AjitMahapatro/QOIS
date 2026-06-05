@@ -152,6 +152,70 @@ QOIS does more than return measurement counts. The backend attempts to classify 
 
 This makes the output more useful for learners, demos, and rapid operator review.
 
+## Dashboard Intelligence System
+
+The operational dashboard now includes a multi-faceted intelligence layer for backend selection and cluster monitoring:
+
+### Queue Overview Panel
+Displays real-time cluster health with:
+- **Metrics summary**: Average queue depth, peak queue load, and healthiest backend identification
+- **Individual backend status**: Each backend shown with queue depth and health indicators
+- **Cluster-wide indicators**: Number of active backends, overall system health state (Optimal/Good/Busy), and total jobs queued
+
+### QID Backend Recommendation Engine
+An AI-powered scoring system that recommends the optimal backend for job submission based on:
+
+**Scoring Formula:**
+```
+Cost Score = (w₁ × Normalized Queue Depth) + (w₂ × Circuit Gate Complexity) + (w₃ × Hardware Error Rate)
+```
+
+Where:
+- `w₁` = 0.4 (queue depth weight, default)
+- `w₂` = 0.35 (circuit complexity weight, default)
+- `w₃` = 0.25 (hardware error rate weight, default)
+
+The backend with the **lowest cost score** is recommended.
+
+**Error Rate Calculation:**
+Hardware error rates are calculated from coherence times (T₁ and T₂) using:
+```
+Error Rate = (1/T₁ + 1/T₂) averaged across all qubits
+```
+
+**Adjustable Execution Priorities:**
+- **Balanced** (default): Equal consideration of queue, complexity, and hardware reliability
+- **Speed-optimized**: Prioritizes fast execution by weighing queue depth more heavily
+- **Reliability-optimized**: Favors stable hardware by emphasizing error rates
+
+The recommendation card displays:
+- Top recommended backend with visual badge
+- Core metrics: qubit count, current queue depth, backend type
+- Reasoning: explanation of why this backend was selected
+- Score component breakdown: visual progress bars showing impact of each factor
+
+### Queue History and Wait Time Prediction
+- **Queue History**: 7-day historical queue trends per backend, visualized on a live chart
+- **Wait Time Prediction**: Estimated queue wait time based on median/mean calculation from completed jobs
+- Confidence indicators show data reliability (high/medium/low)
+
+## Production Improvements
+
+### Memory Optimization
+The background job worker includes aggressive memory management for deployment on resource-constrained environments:
+
+- **Payload filtering**: Extracts only essential data (status, result, metrics) and caps log sizes to prevent heap bloat
+- **Garbage collection**: Explicit nullification of heavy object references with forced GC calls after critical operations
+- **Memory monitoring**: Warnings logged when heap usage exceeds 150MB threshold
+- **Simulator selection**: Uses IBM cloud simulators instead of local Aer to reduce in-process memory overhead
+
+### API Enhancements
+New endpoints for operational intelligence:
+
+- `/api/backends/:backendName/analytics`: Returns calibration matrices (T₁, T₂ times) and calculated error rates
+- `/api/history`: Retrieves queue history with daily aggregations and filterable by backend
+- `/api/predict_wait`: Computes estimated wait times using statistical analysis of historical queue patterns
+
 ## Local Development
 
 ### Prerequisites
@@ -270,10 +334,14 @@ GET  /api/jobs/:id/status
 GET  /api/jobs/:id/results
 ```
 
-### Public backend route
+### Public backend routes
 
 ```text
-GET /api/backends
+GET /api/backends                    # List all backends with queue data
+GET /api/backends/:backendName/details      # Full configuration for a specific backend
+GET /api/backends/:backendName/analytics    # Calibration and error rate data
+GET /api/history?backend_name=X&limit=N    # Queue history for a backend
+GET /api/predict_wait?backend_name=X       # Estimated wait time prediction
 ```
 
 ## Frontend Experience
@@ -286,6 +354,18 @@ The frontend is intentionally styled like a futuristic operations console rather
 - Job creation interface for QASM-based submission
 - Job detail pages for per-run analysis
 - Analytics views for success rates, trends, and status distribution
+
+### Dashboard Enhancements
+The main operational dashboard features:
+
+- **Responsive grid layout**: Queue overview and recommendation cards maintain visual balance across screen sizes
+- **Real-time metrics**: Live-updating queue statistics with animated counter transitions
+- **Interactive filtering**: Filter backends by qubit count, queue depth, type (hardware/simulator), and name search
+- **Sortable views**: Sort backends by queue depth, qubit count, or AI score
+- **Visual health indicators**: Color-coded status (green = healthy, orange = busy, red = critical)
+- **Progressive details**: Tab-based interface for queue predictions, backend specifications, and calibration analytics
+- **Export functionality**: Download queue history and recommendation reports in JSON format
+- **Responsive charting**: Line charts for historical trends, bar charts for current state, tooltip overlays for detailed inspection
 
 ## Deployment Model
 
@@ -317,6 +397,32 @@ That work positions QOIS toward:
 
 In the current branch, the core production path is the job submission and tracking system. The recommendation engine materials should be treated as advanced roadmap or in-progress extension work unless the corresponding backend routes are fully wired in your deployment.
 
+## Recent Production Updates (2024-2025)
+
+### Backend Scoring & Recommendations
+- Implemented dynamic weighted cost-scoring engine with tunable weights for balanced/speed/reliability priorities
+- Added error rate calculation from coherence times (T₁, T₂) for hardware-aware backend selection
+- Integrated circuit complexity metrics (depth, gate count) into recommendation logic
+
+### Operational Intelligence
+- Queue history tracking with daily aggregations and backend filtering
+- Statistical wait time prediction (median/mean/95th percentile) based on 7-day job history
+- Live queue depth monitoring across entire cluster
+- Health status indicators (Optimal/Good/Busy) based on queue saturation
+
+### Performance & Reliability
+- Memory optimization layer with aggressive GC and payload filtering for 512MB Render deployments
+- Switched from local simulators to IBM cloud simulators to reduce memory footprint
+- Added explicit memory monitoring with heap usage warnings
+- Enhanced error handling and retry fallback logic
+
+### User Experience
+- Rebuilt dashboard with balanced grid layout for queue overview and recommendations
+- Added visual feedback with animated counters, color-coded health indicators, and progress bars
+- Implemented filterable backend grid with search, sorting, and comparison view
+- Deployed tab-based detail panel for predictions, specifications, and analytics
+- Added export functionality for queue history and recommendation reports
+
 ## Strengths of the Current Codebase
 
 - Clear separation between UI, API, worker, and quantum runtime layers
@@ -325,6 +431,8 @@ In the current branch, the core production path is the job submission and tracki
 - Real hardware plus simulator fallback path
 - OpenQASM normalization and measurement enforcement
 - Deployment-friendly split frontend/backend design
+- Production-ready operational intelligence with queue monitoring and backend recommendation
+- Optimized for resource-constrained environments with memory monitoring and garbage collection
 
 ## Known Operational Notes
 
@@ -333,14 +441,22 @@ In the current branch, the core production path is the job submission and tracki
 - IBM Runtime execution requires Python dependencies in addition to Node.js dependencies.
 - The backend currently logs some environment values at startup; review before production hardening.
 - Frontend visuals are rich and impressive, but some pages are highly customized and may benefit from a later cleanup pass for maintainability.
+- Backend recommendation scoring uses configurable weights; adjust weights in `estimationService.js` based on your execution priorities.
+- Queue prediction requires at least 5-10 completed jobs for statistical reliability (confidence indicators reflect data sufficiency).
+- Memory threshold for aggressive GC is set to 150MB; adjust `MEMORY_THRESHOLD_MB` in `jobWorker.js` for different deployment environments.
+- The weighted cost-scoring formula is production-ready but can be extended with additional factors (network latency, backend utilization, etc.).
 
 ## Recommended Next Upgrades
 
-- Add a formal test suite for the main API flows and worker behavior
-- Add Docker support for reproducible local setup
-- Introduce API rate limiting and request validation schemas
+- Add automated backend recommendation based on job characteristics (automatic selection vs manual override)
+- Implement A/B testing framework to evaluate recommendation accuracy over time
+- Extend wait time prediction with machine learning models (currently uses statistical analysis)
+- Add alert system for queue anomalies or hardware degradation
+- Build admin dashboard for cluster health monitoring and metrics export
+- Add formal test suite for the main API flows, worker behavior, and recommendation algorithm
+- Introduce Docker support for reproducible local setup
+- Add API rate limiting and request validation schemas
 - Add persistent job logs and audit trails
-- Wire the advanced recommendation engine fully into the live dashboard
 - Add CI for frontend build, backend linting, and Python bridge validation
 
 ## Project Positioning
