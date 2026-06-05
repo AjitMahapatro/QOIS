@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useIsFetching } from "@tanstack/react-query"; // Import useIsFetching
 import { motion, AnimatePresence } from "framer-motion"; // Import AnimatePresence
+import { fetchJson } from "../apiBase.js";
 import {
   BarChart,
   Bar,
@@ -1236,9 +1237,6 @@ html, body {
 }
 `;
 
-const API_BASE =
-  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-
 function computeScore(b) {
   const qubitScore = b.qubits || 0;
   const queueScore = b.queue > 0 ? 1000 / (1 + b.queue) : 1000;
@@ -1267,19 +1265,9 @@ const formatSeconds = (seconds) => {
   }
 };
 
-// Helper for Auth headers
-const getAuthHeaders = () => {
-  const token = localStorage.getItem('token') || localStorage.getItem('authToken');
-  return token ? { 'Authorization': `Bearer ${token}` } : {};
-};
-
 // API call to fetch all backends
 async function fetchBackends() {
-  const res = await fetch(`${API_BASE}/backends`, { headers: getAuthHeaders() });
-  const json = await res.json();
-  if (!res.ok || (!json.ok && !json.success)) {
-    throw new Error(json.error || "Failed to load backends");
-  }
+  const json = await fetchJson("/backends");
   const backends = json.data || [];
 
   return backends.map((b, idx) => ({
@@ -1296,17 +1284,13 @@ async function fetchBackends() {
 
 // API call to fetch full backend details
 async function fetchBackendDetails(backendName) {
-  const res = await fetch(`${API_BASE}/backends/${backendName}/details`, { headers: getAuthHeaders() });
-  const json = await res.json();
-  if (!json.ok && !json.success) throw new Error(json.error || "Failed to load backend details");
+  const json = await fetchJson(`/backends/${backendName}/details`);
   return json.data || json;
 }
 
 // API call to fetch backend analytics
 async function fetchBackendAnalytics(backendName) {
-  const res = await fetch(`${API_BASE}/backends/${backendName}/analytics`, { headers: getAuthHeaders() });
-  const json = await res.json();
-  if (!json.ok && !json.success) throw new Error(json.error || "Failed to load analytics");
+  const json = await fetchJson(`/backends/${backendName}/analytics`);
   return json.data || json;
 }
 
@@ -1315,12 +1299,9 @@ async function fetchBackendAnalytics(backendName) {
  * Returns raw rows: { snapshot_time, queue_length, ... }
  */
 async function fetchQueueHistoryLive(backendName) {
-  const res = await fetch(
-    `${API_BASE}/history?backend_name=${backendName}&limit=200`,
-    { headers: getAuthHeaders() }
+  const json = await fetchJson(
+    `/history?backend_name=${backendName}&limit=200`
   );
-  const json = await res.json();
-  if (!json.ok && !json.success) throw new Error(json.error || "Failed to load history");
   return json.data || [];
 }
 
@@ -1328,12 +1309,9 @@ async function fetchQueueHistoryLive(backendName) {
  * Live API call to fetch wait time prediction
  */
 async function fetchWaitPrediction(backendName) {
-  const res = await fetch(
-    `${API_BASE}/predict_wait?backend_name=${backendName}`,
-    { headers: getAuthHeaders() }
+  const json = await fetchJson(
+    `/predict_wait?backend_name=${backendName}`
   );
-  const json = await res.json();
-  if (!json.ok && !json.success) throw new Error(json.error || "Failed to load prediction");
   return json; // { ok: true, estimate_seconds: N, median_queue_length: M }
 }
 

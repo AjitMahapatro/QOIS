@@ -100,10 +100,18 @@ export const fetchRuntimeJobFromIBM = async (jobId) => {
 
   let rawResults = null;
   let parsedCounts = {};
+  let resultWarning = "";
 
   if (stateStr === "COMPLETED" || stateStr === "DONE") {
-    rawResults = await getJobResultsFromIBM(jobId);
-    parsedCounts = extractRuntimeCounts(rawResults);
+    try {
+      rawResults = await getJobResultsFromIBM(jobId);
+      parsedCounts = extractRuntimeCounts(rawResults);
+    } catch (error) {
+      resultWarning =
+        error.response?.data?.message ||
+        error.message ||
+        "IBM Runtime result payload is not available yet.";
+    }
   }
 
   return {
@@ -118,6 +126,7 @@ export const fetchRuntimeJobFromIBM = async (jobId) => {
       source: "ibm_runtime_rest",
       counts: parsedCounts
     },
+    resultWarning,
     reason: statusData.state?.reason || "",
     errorMessage: statusData.error_message || ""
   };

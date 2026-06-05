@@ -69,6 +69,7 @@ function filterRuntimePayload(payload) {
     mode: payload.mode || payload.runMode || "hardware",
     warnings: payload.warnings ? payload.warnings.slice(0, 5) : [], // Limit warnings array
     suggestion: payload.suggestion,
+    resultWarning: payload.resultWarning,
   };
 
   return filtered;
@@ -276,14 +277,36 @@ const runJobWorker = async () => {
         if (mappedStatus === "completed") {
           const parsedResult = filteredRuntime.result;
           
-          // Guard Clause: Prevent ghost completions if counts are completely missing
+          // IBM can mark a job completed slightly before the results payload is
+          // fully retrievable. Keep the job completed instead of downgrading it
+          // to failed, and let the results endpoint refresh later.
           if (!parsedResult || !parsedResult.counts || Object.keys(parsedResult.counts).length === 0) {
-            await retryOrFallback(
-              job,
-              "IBM Runtime reported complete but returned empty payload measurements.",
-              filteredRuntime.logs || ""
+            const completedWithoutCountsJob = await Job.findByIdAndUpdate(
+              job._id,
+              {
+                $set: {
+                  status: "completed",
+                  ibmResult: parsedResult || {
+                    source: "ibm_runtime_rest",
+                    type: "sampler",
+                    counts: {}
+                  },
+                  failureInfo: null,
+                  ...updateFields,
+                  "runtimeInfo.resultWarning":
+                    filteredRuntime.resultWarning ||
+                    "IBM marked the job completed, but measurement data was not ready yet.",
+                }
+              },
+              { new: true }
             );
-            aggressiveGarbageCollection([runtime, filteredRuntime]);
+
+            emitJobUpdate("jobCompleted", completedWithoutCountsJob);
+            aggressiveGarbageCollection([
+              runtime,
+              filteredRuntime,
+              completedWithoutCountsJob
+            ]);
             continue;
           }
 

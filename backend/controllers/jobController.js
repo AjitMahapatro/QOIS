@@ -160,11 +160,14 @@ async function refreshJobResultsFromIBM(job) {
       lastStatus: runtime.status,
       metrics: runtime.metrics || {},
       usage: runtime.usage || {},
+      resultWarning: runtime.resultWarning || null,
     },
   };
 
   if (nextStatus === "completed" && hasStoredCounts(runtime.result)) {
     updateFields.ibmResult = runtime.result;
+    updateFields.failureInfo = null;
+  } else if (nextStatus === "completed") {
     updateFields.failureInfo = null;
   } else if (nextStatus === "failed" || nextStatus === "cancelled") {
     updateFields.failureInfo = {
@@ -182,6 +185,23 @@ async function refreshJobResultsFromIBM(job) {
     job._id,
     { $set: updateFields },
     { new: true }
+  );
+}
+
+function shouldAttemptLiveRefresh(job) {
+  if (!job?.ibmJobId) return false;
+
+  const status = String(job.status || "").toLowerCase();
+  const recentlyUpdated =
+    job.updatedAt &&
+    Date.now() - new Date(job.updatedAt).getTime() < 24 * 60 * 60 * 1000;
+
+  return (
+    status === "queued" ||
+    status === "running" ||
+    status === "failed" ||
+    (status === "completed" && !hasStoredCounts(job.ibmResult)) ||
+    (status === "cancelled" && recentlyUpdated)
   );
 }
 
@@ -329,7 +349,31 @@ export const getJobs = asyncHandler(async (req, res) => {
       ? Job.find().populate("user", "name email")
       : Job.find({ user: req.user.id });
 
-  const jobs = await query.sort("-createdAt");
+  let jobs = await query.sort("-createdAt");
+
+  const refreshTargets = jobs.slice(0, 8).filter(shouldAttemptLiveRefresh);
+  if (refreshTargets.length > 0) {
+    const refreshedMap = new Map();
+
+    await Promise.all(
+      refreshTargets.map(async (job) => {
+        try {
+          const refreshed = await refreshJobResultsFromIBM(job);
+          if (refreshed) {
+            refreshedMap.set(String(refreshed._id), refreshed);
+          }
+        } catch {
+          // Keep serving the stored job snapshot if IBM refresh is temporarily unavailable.
+        }
+      })
+    );
+
+    jobs = jobs.map((job) => refreshedMap.get(String(job._id)) || job);
+  }
+
+  if (req.user.role === "admin") {
+    await Job.populate(jobs, { path: "user", select: "name email" });
+  }
 
   res.status(200).json({
     success: true,
@@ -342,10 +386,19 @@ export const getJobs = asyncHandler(async (req, res) => {
  * Get single job
  */
 export const getJob = asyncHandler(async (req, res) => {
-  const job = await Job.findById(req.params.id).populate("user", "name email");
+  let job = await Job.findById(req.params.id).populate("user", "name email");
 
   if (!job) {
     throw new ErrorResponse("Job not found.", 404);
+  }
+
+  if (shouldAttemptLiveRefresh(job)) {
+    try {
+      job = await refreshJobResultsFromIBM(job);
+      await job.populate("user", "name email");
+    } catch {
+      // Keep serving the last stored snapshot if live IBM refresh is unavailable.
+    }
   }
 
   res.status(200).json({
@@ -405,10 +458,18 @@ export const getBackendsList = asyncHandler(async (req, res) => {
  * Get job status
  */
 export const getJobStatus = asyncHandler(async (req, res) => {
-  const job = await Job.findById(req.params.id);
+  let job = await Job.findById(req.params.id);
 
   if (!job) {
     throw new ErrorResponse("Job not found.", 404);
+  }
+
+  if (shouldAttemptLiveRefresh(job)) {
+    try {
+      job = await refreshJobResultsFromIBM(job);
+    } catch {
+      // Fall back to the last stored snapshot if IBM is temporarily unavailable.
+    }
   }
 
   res.status(200).json({

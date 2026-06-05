@@ -36,8 +36,7 @@ import {
   User,
 } from "lucide-react";
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "https://qois.onrender.com/api";
+import { fetchJson } from "../apiBase.js";
 
 /* =========================================================
    ULTRA NEON GLASSMORPHIC HIRING PAGE (qh-* CLASSES)
@@ -746,30 +745,21 @@ export default function HiringPage() {
   /* =====================================================
      ⭐ FETCH JOBS (Role handled by backend automatically)
   ===================================================== */
-  const fetchJobs = useCallback(async () => {
+	  const fetchJobs = useCallback(async () => {
 
     try {
 
       setIsLoading(true);
       setError(null);
 
-      const token = localStorage.getItem("token");
+	      const token =
+	        localStorage.getItem("token") || localStorage.getItem("authToken");
 
       if (!token) {
         throw new Error("Missing auth token. Please log in again.");
       }
 
-      const res = await fetch(`${API_BASE_URL}/jobs`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const json = await res.json();
-
-      if (!res.ok || !json.success) {
-        throw new Error(json.error || "Failed to load jobs.");
-      }
+	      const json = await fetchJson("/jobs");
 
       setJobs(Array.isArray(json.data) ? json.data : []);
 
