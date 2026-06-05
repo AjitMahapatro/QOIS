@@ -1269,9 +1269,15 @@ const formatSeconds = (seconds) => {
   }
 };
 
+// Helper for Auth headers
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('token') || localStorage.getItem('authToken');
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+};
+
 // API call to fetch all backends
 async function fetchBackends() {
-  const res = await fetch(`${API_BASE}/backends`);
+  const res = await fetch(`${API_BASE}/backends`, { headers: getAuthHeaders() });
   const json = await res.json();
   const backends = json.data || [];
 
@@ -1289,7 +1295,7 @@ async function fetchBackends() {
 
 // API call to fetch full backend details
 async function fetchBackendDetails(backendName) {
-  const res = await fetch(`${API_BASE}/backends/${backendName}/details`);
+  const res = await fetch(`${API_BASE}/backends/${backendName}/details`, { headers: getAuthHeaders() });
   const json = await res.json();
   if (!json.ok && !json.success) throw new Error(json.error || "Failed to load backend details");
   return json.data || json;
@@ -1297,7 +1303,7 @@ async function fetchBackendDetails(backendName) {
 
 // API call to fetch backend analytics
 async function fetchBackendAnalytics(backendName) {
-  const res = await fetch(`${API_BASE}/backends/${backendName}/analytics`);
+  const res = await fetch(`${API_BASE}/backends/${backendName}/analytics`, { headers: getAuthHeaders() });
   const json = await res.json();
   if (!json.ok && !json.success) throw new Error(json.error || "Failed to load analytics");
   return json.data || json;
@@ -1309,7 +1315,8 @@ async function fetchBackendAnalytics(backendName) {
  */
 async function fetchQueueHistoryLive(backendName) {
   const res = await fetch(
-    `${API_BASE}/history?backend_name=${backendName}&limit=200`
+    `${API_BASE}/history?backend_name=${backendName}&limit=200`,
+    { headers: getAuthHeaders() }
   );
   const json = await res.json();
   if (!json.ok && !json.success) throw new Error(json.error || "Failed to load history");
@@ -1321,7 +1328,8 @@ async function fetchQueueHistoryLive(backendName) {
  */
 async function fetchWaitPrediction(backendName) {
   const res = await fetch(
-    `${API_BASE}/predict_wait?backend_name=${backendName}`
+    `${API_BASE}/predict_wait?backend_name=${backendName}`,
+    { headers: getAuthHeaders() }
   );
   const json = await res.json();
   if (!json.ok && !json.success) throw new Error(json.error || "Failed to load prediction");
