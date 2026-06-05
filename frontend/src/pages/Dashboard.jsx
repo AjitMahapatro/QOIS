@@ -1766,7 +1766,6 @@ export default function Dashboard() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                 >
-                  {/* NEW HEADER BAR IMPLEMENTATION */}
                   <div className="qd-card-header-bar">
                     <div className="qd-card-header">
                       <div>
@@ -1781,7 +1780,6 @@ export default function Dashboard() {
                       </span>
                     </div>
                   </div>
-                  {/* END NEW HEADER BAR */}
 
                   <div className="qd-chart-wrapper">
                     <ResponsiveContainer width="100%" height="100%">
@@ -1795,7 +1793,7 @@ export default function Dashboard() {
                     </ResponsiveContainer>
                   </div>
 
-                  {/* QUEUE METRICS & INSIGHTS */}
+                  {/* Key metrics at a glance */}
                   <div style={{ marginTop: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
                     <div style={{ background: 'linear-gradient(135deg, rgba(34,211,238,0.1) 0%, rgba(34,211,238,0.05) 100%)', border: '1px solid rgba(34,211,238,0.2)', borderRadius: '10px', padding: '12px' }}>
                       <div style={{ fontSize: '10px', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>Avg Queue</div>
@@ -1814,7 +1812,7 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  {/* BACKEND STATUS GRID */}
+                  {/* Individual backend status checks */}
                   <div style={{ marginTop: '14px', padding: '12px', background: 'rgba(15,23,42,0.4)', borderRadius: '10px', border: '1px solid rgba(34,211,238,0.1)' }}>
                     <div style={{ fontSize: '10px', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '10px' }}>📊 Backend Status</div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px' }}>
@@ -1830,7 +1828,7 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  {/* SYSTEM INTELLIGENCE */}
+                  {/* Cluster-wide health indicators */}
                   <div style={{ marginTop: '14px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
                     <div style={{ background: 'rgba(59,89,152,0.15)', border: '1px solid rgba(59,89,152,0.25)', borderRadius: '10px', padding: '12px' }}>
                       <div style={{ fontSize: '10px', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>Active Backends</div>
@@ -1850,14 +1848,12 @@ export default function Dashboard() {
                   </div>
                 </motion.div>
 
-                {/* AI Recommendation + Filters */}
                 <motion.div
                   className="qd-card"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.05 }}
                 >
-                  {/* NEW HEADER BAR IMPLEMENTATION */}
                   <div className="qd-card-header-bar">
                     <div className="qd-card-header">
                       <div>
@@ -1872,7 +1868,6 @@ export default function Dashboard() {
                       </div>
                     </div>
                   </div>
-                  {/* END NEW HEADER BAR */}
 
                   <div className="qd-filter-row" style={{ marginTop: '16px', background: 'linear-gradient(90deg, rgba(34,211,238,0.05) 0%, rgba(139,92,246,0.05) 100%)', padding: '16px', borderRadius: '14px', border: '1px solid rgba(139,92,246,0.15)' }}>
                     <div className="qd-filter-group">
@@ -2092,7 +2087,6 @@ export default function Dashboard() {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
               >
-                {/* NEW HEADER BAR IMPLEMENTATION */}
                 <div className="qd-card-header-bar">
                   <div className="qd-card-header">
                     <div>
@@ -2107,7 +2101,6 @@ export default function Dashboard() {
                     </span>
                   </div>
                 </div>
-                {/* END NEW HEADER BAR */}
 
                 <div className="qd-backend-grid" style={{ marginTop: '0px' }}>
                   {filtered.map((b) => {
@@ -2140,14 +2133,14 @@ export default function Dashboard() {
                             <div className="qd-backend-info-item">
                               <div className="qd-backend-info-label">Qubits</div>
                               <div className="qd-backend-info-value">
-                                {/* CountUp Animation */}
+                                {/* Animated number counter */}
                                 <CountUp end={b.qubits} />
                               </div>
                             </div>
                             <div className="qd-backend-info-item">
                               <div className="qd-backend-info-label">Queue</div>
                               <div className="qd-backend-info-value">
-                                {/* CountUp Animation */}
+                                {/* Animated number counter */}
                                 <CountUp end={b.queue} />
                               </div>
                             </div>
@@ -2180,7 +2173,7 @@ export default function Dashboard() {
                 </div>
               </motion.div>
 
-              {/* NEW HISTORY + DEEP VIEW ROW */}
+              {/* Historical trends and detailed backend analysis */}
               <div className="qd-row" style={{ marginBottom: 22 }}>
                 {/* Queue History Chart */}
                 <motion.div
@@ -2189,7 +2182,6 @@ export default function Dashboard() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.1 }}
                 >
-                  {/* NEW HEADER BAR IMPLEMENTATION */}
                   <div className="qd-card-header-bar">
                     <div className="qd-card-header">
                       <div>
@@ -2203,7 +2195,6 @@ export default function Dashboard() {
                       </div>
                     </div>
                   </div>
-                  {/* END NEW HEADER BAR */}
 
                   <div
                     className="qd-chart-wrapper"
@@ -2294,7 +2285,6 @@ export default function Dashboard() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.05 }}
                 >
-                  {/* NEW HEADER BAR IMPLEMENTATION */}
                   <div className="qd-card-header-bar">
                     <div className="qd-card-header">
                       <div>
@@ -2336,7 +2326,6 @@ export default function Dashboard() {
                       </div>
                     </div>
                   </div>
-                  {/* END NEW HEADER BAR */}
 
                   {!selected ? (
                     <p style={{ fontSize: 12, marginTop: 8 }}>
@@ -2810,7 +2799,6 @@ export default function Dashboard() {
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                 >
-                  {/* NEW HEADER BAR IMPLEMENTATION */}
                   <div className="qd-card-header-bar">
                     <div className="qd-card-header">
                       <div>
@@ -2823,7 +2811,6 @@ export default function Dashboard() {
                       </div>
                     </div>
                   </div>
-                  {/* END NEW HEADER BAR */}
 
                   <div className="qd-status-list" style={{ marginTop: '0px' }}>
                     <div className="qd-status-item">
@@ -2860,7 +2847,6 @@ export default function Dashboard() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.04 }}
                 >
-                  {/* NEW HEADER BAR IMPLEMENTATION */}
                   <div className="qd-card-header-bar">
                     <div className="qd-card-header">
                       <div>
@@ -2873,7 +2859,6 @@ export default function Dashboard() {
                       </div>
                     </div>
                   </div>
-                  {/* END NEW HEADER BAR */}
 
                   <button
                     className="qd-chip-btn"
