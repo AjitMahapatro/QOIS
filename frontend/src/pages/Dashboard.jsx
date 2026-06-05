@@ -1236,10 +1236,8 @@ html, body {
 }
 `;
 
-// This automatically uses localhost:5000 offline and your live server when deployed!
-const API_BASE = import.meta.env.MODE === "production"
-  ? "/api"
-  : "http://localhost:5000/api";
+const API_BASE =
+  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 function computeScore(b) {
   const qubitScore = b.qubits || 0;
@@ -1279,6 +1277,9 @@ const getAuthHeaders = () => {
 async function fetchBackends() {
   const res = await fetch(`${API_BASE}/backends`, { headers: getAuthHeaders() });
   const json = await res.json();
+  if (!res.ok || (!json.ok && !json.success)) {
+    throw new Error(json.error || "Failed to load backends");
+  }
   const backends = json.data || [];
 
   return backends.map((b, idx) => ({
