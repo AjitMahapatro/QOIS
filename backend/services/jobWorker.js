@@ -1,13 +1,34 @@
 import Job from "../models/Job.js";
 import { emitJobUpdate } from "../utils/socket.js";
 import {
-  refreshRuntimeJob,
   submitRuntimeJob,
 } from "./qiskitBridge.js";
+import { fetchRuntimeJobFromIBM } from "./ibmService.js";
 
 const POLLING_INTERVAL = 10000;
 const MAX_RETRIES = 1;
 const MEMORY_THRESHOLD_MB = 150;
+
+/**
+ * Direct REST API fetch to bypass IBM's new security gateway.
+ * Structure the header format exactly as required by IBM Cloud.
+ */
+async function fetchJobFromIBMREST(jobId) {
+  try {
+    return await fetchRuntimeJobFromIBM(jobId);
+  } catch (err) {
+    if (
+      String(err?.response?.status || "") === "404" ||
+      String(err?.response?.status || "") === "401"
+    ) {
+      console.warn(
+        `IBM Runtime REST refresh failed for ${jobId}: ${err.response?.status} ${err.response?.data?.message || err.message}`
+      );
+    }
+
+    throw err;
+  }
+}
 
 /**
  * Filter runtime payload to extract only essential keys.
@@ -240,11 +261,7 @@ const runJobWorker = async () => {
       }
 
       try {
-        const runtime = await refreshRuntimeJob({
-          jobId: job.ibmJobId,
-          qasm: job.rawQASM,
-          shots: job.shots,
-        });
+        const runtime = await fetchJobFromIBMREST(job.ibmJobId);
 
         const filteredRuntime = filterRuntimePayload(runtime);
         const mappedStatus = mapRuntimeStatus(filteredRuntime.status);

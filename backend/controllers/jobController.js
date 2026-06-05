@@ -7,13 +7,20 @@ import {
   submitRuntimeJob,
   validateRuntimeCircuit,
 } from "../services/qiskitBridge.js";
+import { fetchRuntimeJobFromIBM } from "../services/ibmService.js";
 
 const BACKEND_CACHE_TTL_MS = 5 * 60 * 1000;
 const backendCache = new Map();
 const SIMULATOR_BACKEND_NAME = "aer_simulator";
 
 function interpretQuantumResults(result, circuitType = null) {
-  if (!result || !result.data) {
+  const counts =
+    result?.data?.counts ||
+    result?.counts ||
+    result?.result?.counts ||
+    {};
+
+  if (!result || Object.keys(counts).length === 0) {
     return {
       interpretation: "No results available",
       confidence: "0%",
@@ -21,7 +28,6 @@ function interpretQuantumResults(result, circuitType = null) {
     };
   }
 
-  const counts = result.data.counts || {};
   const totalShots = Object.values(counts).reduce((sum, count) => sum + count, 0);
   
   if (totalShots === 0) {
@@ -119,13 +125,64 @@ function interpretQuantumResults(result, circuitType = null) {
 function mapRuntimeStatus(status) {
   const normalized = String(status || "").toUpperCase();
 
-  if (normalized === "DONE") return "completed";
-  if (normalized === "ERROR") return "failed";
+  if (normalized === "DONE" || normalized === "COMPLETED") return "completed";
+  if (normalized === "ERROR" || normalized === "FAILED") return "failed";
   if (normalized === "CANCELLED") return "cancelled";
   if (normalized === "RUNNING") return "running";
-  if (normalized === "QUEUED") return "queued";
+  if (
+    normalized === "QUEUED" ||
+    normalized === "PENDING" ||
+    normalized === "INITIALIZING" ||
+    normalized === "VALIDATING" ||
+    normalized === "CREATING"
+  ) {
+    return "queued";
+  }
 
   return "pending";
+}
+
+function hasStoredCounts(result) {
+  return Boolean(
+    result?.counts &&
+      typeof result.counts === "object" &&
+      Object.keys(result.counts).length > 0
+  );
+}
+
+async function refreshJobResultsFromIBM(job) {
+  const runtime = await fetchRuntimeJobFromIBM(job.ibmJobId);
+  const nextStatus = mapRuntimeStatus(runtime.status);
+  const updateFields = {
+    status: nextStatus,
+    runtimeInfo: {
+      ...(job.runtimeInfo || {}),
+      lastStatus: runtime.status,
+      metrics: runtime.metrics || {},
+      usage: runtime.usage || {},
+    },
+  };
+
+  if (nextStatus === "completed" && hasStoredCounts(runtime.result)) {
+    updateFields.ibmResult = runtime.result;
+    updateFields.failureInfo = null;
+  } else if (nextStatus === "failed" || nextStatus === "cancelled") {
+    updateFields.failureInfo = {
+      reason:
+        runtime.reason ||
+        runtime.errorMessage ||
+        `Runtime ended in ${runtime.status}.`,
+      logs: "",
+      suggestion: "Refresh again after confirming the IBM Runtime job details.",
+      backend: job.backend,
+    };
+  }
+
+  return Job.findByIdAndUpdate(
+    job._id,
+    { $set: updateFields },
+    { new: true }
+  );
 }
 
 /**
@@ -372,9 +429,26 @@ export const getJobStatus = asyncHandler(async (req, res) => {
  * Get job results
  */
 export const getJobResults = asyncHandler(async (req, res) => {
-  const job = await Job.findById(req.params.id);
+  let job = await Job.findById(req.params.id);
 
-  if (!job || job.status !== "completed") {
+  if (!job) {
+    throw new ErrorResponse("Job not found.", 404);
+  }
+
+  if (job.ibmJobId && (job.status !== "completed" || !hasStoredCounts(job.ibmResult))) {
+    try {
+      job = await refreshJobResultsFromIBM(job);
+    } catch (error) {
+      throw new ErrorResponse(
+        error.response?.data?.message ||
+          error.message ||
+          "Failed to refresh job results from IBM Runtime.",
+        502
+      );
+    }
+  }
+
+  if (!job || job.status !== "completed" || !hasStoredCounts(job.ibmResult)) {
     throw new ErrorResponse("Results not available.", 400);
   }
 
