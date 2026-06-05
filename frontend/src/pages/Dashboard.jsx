@@ -1237,8 +1237,8 @@ html, body {
 `;
 
 // This automatically uses localhost:5000 offline and your live server when deployed!
-const API_BASE = import.meta.env.MODE === "production" 
-  ? "/api" 
+const API_BASE = import.meta.env.MODE === "production"
+  ? "/api"
   : "http://localhost:5000/api";
 
 function computeScore(b) {
@@ -1291,16 +1291,16 @@ async function fetchBackends() {
 async function fetchBackendDetails(backendName) {
   const res = await fetch(`${API_BASE}/backends/${backendName}/details`);
   const json = await res.json();
-  if (!json.ok) throw new Error(json.error || "Failed to load backend details");
-  return json.data;
+  if (!json.ok && !json.success) throw new Error(json.error || "Failed to load backend details");
+  return json.data || json;
 }
 
 // API call to fetch backend analytics
 async function fetchBackendAnalytics(backendName) {
   const res = await fetch(`${API_BASE}/backends/${backendName}/analytics`);
   const json = await res.json();
-  if (!json.ok) throw new Error(json.error || "Failed to load analytics");
-  return json.data;
+  if (!json.ok && !json.success) throw new Error(json.error || "Failed to load analytics");
+  return json.data || json;
 }
 
 /**
@@ -1312,7 +1312,7 @@ async function fetchQueueHistoryLive(backendName) {
     `${API_BASE}/history?backend_name=${backendName}&limit=200`
   );
   const json = await res.json();
-  if (!json.ok) throw new Error(json.error || "Failed to load history");
+  if (!json.ok && !json.success) throw new Error(json.error || "Failed to load history");
   return json.data || [];
 }
 
@@ -1324,7 +1324,7 @@ async function fetchWaitPrediction(backendName) {
     `${API_BASE}/predict_wait?backend_name=${backendName}`
   );
   const json = await res.json();
-  if (!json.ok) throw new Error(json.error || "Failed to load prediction");
+  if (!json.ok && !json.success) throw new Error(json.error || "Failed to load prediction");
   return json; // { ok: true, estimate_seconds: N, median_queue_length: M }
 }
 
@@ -1346,13 +1346,13 @@ const CountUp = ({ end, duration = 1.2, formatter = (n) => n }) => {
       if (!startRef.current) startRef.current = timestamp;
       const progress = timestamp - startRef.current;
       const timeRatio = Math.min(1, progress / (duration * 1000));
-      
+
       // Use the easing curve for a smoother effect
       const easedTime = easing[0] * Math.pow(timeRatio, 3) +
-                       easing[1] * Math.pow(timeRatio, 2) +
-                       easing[2] * timeRatio +
-                       easing[3] * Math.pow(timeRatio, 4) +
-                       (1 - easing[0] - easing[1] - easing[2] - easing[3]) * Math.pow(timeRatio, 5);
+        easing[1] * Math.pow(timeRatio, 2) +
+        easing[2] * timeRatio +
+        easing[3] * Math.pow(timeRatio, 4) +
+        (1 - easing[0] - easing[1] - easing[2] - easing[3]) * Math.pow(timeRatio, 5);
 
       const currentValue = Math.round(easedTime * final);
       setCount(currentValue);
@@ -1407,10 +1407,9 @@ const CustomTooltip = ({ active, payload, label }) => {
 ========================================================= */
 const LineChartCustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
-    const d = new Date(label * 1000);
-    const time = d.toLocaleTimeString();
+    const time = label;
     const queue = payload[0].value;
-    
+
     // Custom style for the LineChart Tooltip (transparent/dark)
     return (
       <div
@@ -1493,12 +1492,12 @@ export default function Dashboard() {
     queryFn: fetchBackends,
     refetchInterval: 20000,
   });
-  
+
   // Set isDataLoaded to true once the initial backends query completes successfully
   useEffect(() => {
-      if (!backendsLoading && backends.length > 0 && !isDataLoaded) {
-          setIsDataLoaded(true);
-      }
+    if (!backendsLoading && backends.length > 0 && !isDataLoaded) {
+      setIsDataLoaded(true);
+    }
   }, [backendsLoading, backends.length, isDataLoaded]);
 
   // Derived analytics
@@ -1507,9 +1506,9 @@ export default function Dashboard() {
     const busiest =
       backends.length > 0
         ? backends.reduce(
-            (best, b) => (b.queue > (best.queue || 0) ? b : best),
-            backends[0]
-          )
+          (best, b) => (b.queue > (best.queue || 0) ? b : best),
+          backends[0]
+        )
         : null;
     return {
       totalQueue,
@@ -1540,12 +1539,12 @@ export default function Dashboard() {
 
   // Ensure a selected backend is set on initial load or filter change
   useEffect(() => {
-      if (!selectedId && filtered.length > 0) {
-          setSelectedId(filtered[0].id);
-      } else if (selectedId && !filtered.find(b => b.id === selectedId)) {
-          // If selected backend is filtered out, select the first one
-          setSelectedId(filtered.length > 0 ? filtered[0].id : null);
-      }
+    if (!selectedId && filtered.length > 0) {
+      setSelectedId(filtered[0].id);
+    } else if (selectedId && !filtered.find(b => b.id === selectedId)) {
+      // If selected backend is filtered out, select the first one
+      setSelectedId(filtered.length > 0 ? filtered[0].id : null);
+    }
   }, [filtered, selectedId]);
 
   const selected = filtered.find((b) => b.id === selectedId) || filtered[0];
@@ -1662,1282 +1661,1290 @@ export default function Dashboard() {
   const totalQueue = analytics.totalQueue;
 
   // prepare analytics charts from analyticsData
-  const t1Data =
-    analyticsData?.t1_distribution?.slice(0, 40).map((d) => ({
-      qubit: `q${d.qubit}`,
-      value: d.t1,
-    })) || [];
-  const t2Data =
-    analyticsData?.t2_distribution?.slice(0, 40).map((d) => ({
-      qubit: `q${d.qubit}`,
-      value: d.t2,
-    })) || [];
-  const readoutData =
-    analyticsData?.readout_error_distribution?.slice(0, 40).map((d) => ({
-      qubit: `q${d.qubit}`,
-      value: d.readout_error ?? d.error ?? d.p ?? 0,
-    })) || [];
+  const t1Times = analyticsData?.t1_coherence_times || [];
+  const t2Times = analyticsData?.t2_coherence_times || [];
+  const errorRates = analyticsData?.calculated_error_rates || [];
 
-  const summary = analyticsData?.summary || {};
+  const t1Data = t1Times.slice(0, 40).map((t1, index) => ({
+    qubit: `q${index}`,
+    value: t1,
+  }));
+
+  const t2Data = t2Times.slice(0, 40).map((t2, index) => ({
+    qubit: `q${index}`,
+    value: t2,
+  }));
+
+  const readoutData = errorRates.slice(0, 40).map((err, index) => ({
+    qubit: `q${index}`,
+    value: err,
+  }));
+
+  const avg_t1 = t1Times.length > 0 ? t1Times.reduce((a, b) => a + b, 0) / t1Times.length : 0;
+  const avg_t2 = t2Times.length > 0 ? t2Times.reduce((a, b) => a + b, 0) / t2Times.length : 0;
+
+  const summary = analyticsData?.summary || {
+    avg_t1_us: avg_t1,
+    avg_t2_us: avg_t2,
+  };
   const basic = details?.basic_info || {};
   const config = details?.configuration || {};
   const status = details?.status || {};
   const calibration = details?.calibration || {};
 
   // Check for global loading state. We only show the preloader on the initial load.
- 
+
   return (
-      <>
-        <style>{styles}</style>
-        
-        
-        
-        {/* Main Dashboard Content */}
-        <div className={containerClass}>
-            <div className="qd-inner">
-              {/* HEADER */}
-              <div className="qd-header">
-                <motion.div
-                  className="qd-title-wrap"
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                >
-                  <div>
-                    <div className="qd-title-main">QUANTUM INTELLIGENCE DASHBOARD</div>
-                    <div className="qd-title-sub">
-                      Live IBM backend insights • QID recommendations • Quantum analytics
-                    </div>
-                  </div>
-                  
+    <>
+      <style>{styles}</style>
 
 
-                </motion.div>
+
+      {/* Main Dashboard Content */}
+      <div className={containerClass}>
+        <div className="qd-inner">
+          {/* HEADER */}
+          <div className="qd-header">
+            <motion.div
+              className="qd-title-wrap"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <div>
+                <div className="qd-title-main">QUANTUM INTELLIGENCE DASHBOARD</div>
+                <div className="qd-title-sub">
+                  Live IBM backend insights • QID recommendations • Quantum analytics
+                </div>
               </div>
 
-              {/* Notification */}
-              {notification && <div className="qd-notice">{notification}</div>}
 
-              {/* STATS */}
-              {/* NOTE: Stats cards are small and don't need the large header bar */}
-              <motion.div
-                className="qd-stats-grid"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-              >
-                <div className="qd-stat-card">
-                  <div className="qd-stat-label">Total Backends</div>
-                  <div className="qd-stat-value">
-                    {/* CountUp Animation */}
-                    <CountUp end={backends.length} />
-                  </div>
-                </div>
-                <div className="qd-stat-card">
-                  <div className="qd-stat-label">Hardware</div>
-                  <div className="qd-stat-value">
-                    {/* CountUp Animation */}
-                    <CountUp
-                      end={backends.filter((b) => b.type === "hardware").length}
-                    />
-                  </div>
-                </div>
-                <div className="qd-stat-card">
-                  <div className="qd-stat-label">Simulators</div>
-                  <div className="qd-stat-value">
-                    {/* CountUp Animation */}
-                    <CountUp
-                      end={backends.filter((b) => b.type === "simulator").length}
-                    />
-                  </div>
-                </div>
-                <div className="qd-stat-card">
-                  <div className="qd-stat-label">Total Queue</div>
-                  <div className="qd-stat-value">
-                    {/* CountUp Animation */}
-                    <CountUp end={totalQueue} formatter={(n) => n.toLocaleString()} />
-                  </div>
-                </div>
-              </motion.div>
 
-              {/* TOP ROW */}
-              <div className="qd-row">
-                {/* Queue Overview */}
-                <motion.div
-                  className="qd-card"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
+            </motion.div>
+          </div>
+
+          {/* Notification */}
+          {notification && <div className="qd-notice">{notification}</div>}
+
+          {/* STATS */}
+          {/* NOTE: Stats cards are small and don't need the large header bar */}
+          <motion.div
+            className="qd-stats-grid"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <div className="qd-stat-card">
+              <div className="qd-stat-label">Total Backends</div>
+              <div className="qd-stat-value">
+                {/* CountUp Animation */}
+                <CountUp end={backends.length} />
+              </div>
+            </div>
+            <div className="qd-stat-card">
+              <div className="qd-stat-label">Hardware</div>
+              <div className="qd-stat-value">
+                {/* CountUp Animation */}
+                <CountUp
+                  end={backends.filter((b) => b.type === "hardware").length}
+                />
+              </div>
+            </div>
+            <div className="qd-stat-card">
+              <div className="qd-stat-label">Simulators</div>
+              <div className="qd-stat-value">
+                {/* CountUp Animation */}
+                <CountUp
+                  end={backends.filter((b) => b.type === "simulator").length}
+                />
+              </div>
+            </div>
+            <div className="qd-stat-card">
+              <div className="qd-stat-label">Total Queue</div>
+              <div className="qd-stat-value">
+                {/* CountUp Animation */}
+                <CountUp end={totalQueue} formatter={(n) => n.toLocaleString()} />
+              </div>
+            </div>
+          </motion.div>
+
+          {/* TOP ROW */}
+          <div className="qd-row">
+            {/* Queue Overview */}
+            <motion.div
+              className="qd-card"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <div className="qd-card-header-bar">
+                <div className="qd-card-header">
+                  <div>
+                    <div className="qd-card-title">Queue Overview</div>
+                    <div className="qd-card-sub">
+                      Real-time IBM Quantum cluster queue activity
+                    </div>
+                  </div>
+                  <span className="qd-live-pill">
+                    <span className="qd-live-dot" />
+                    LIVE
+                  </span>
+                </div>
+              </div>
+
+              <div className="qd-chart-wrapper">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={filtered}>
+                    <CartesianGrid stroke="#3b3b74" strokeDasharray="4 4" />
+                    <XAxis dataKey="name" stroke="currentColor" />
+                    <YAxis stroke="currentColor" />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Bar dataKey="queue" fill="#fb3cf8f7" radius={[7, 7, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Key metrics at a glance */}
+              <div style={{ marginTop: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                <div style={{ background: 'linear-gradient(135deg, rgba(34,211,238,0.1) 0%, rgba(34,211,238,0.05) 100%)', border: '1px solid rgba(34,211,238,0.2)', borderRadius: '10px', padding: '12px' }}>
+                  <div style={{ fontSize: '10px', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>Avg Queue</div>
+                  <div style={{ fontSize: '18px', fontWeight: '700', color: '#22d3ee' }}>{Math.round(filtered.reduce((s, b) => s + b.queue, 0) / (filtered.length || 1))}</div>
+                  <div style={{ fontSize: '9px', color: '#6b7280', marginTop: '4px' }}>across all backends</div>
+                </div>
+                <div style={{ background: 'linear-gradient(135deg, rgba(249,115,22,0.1) 0%, rgba(249,115,22,0.05) 100%)', border: '1px solid rgba(249,115,22,0.2)', borderRadius: '10px', padding: '12px' }}>
+                  <div style={{ fontSize: '10px', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>Peak Queue</div>
+                  <div style={{ fontSize: '18px', fontWeight: '700', color: '#f97316' }}>{Math.max(...filtered.map(b => b.queue), 0)}</div>
+                  <div style={{ fontSize: '9px', color: '#6b7280', marginTop: '4px' }}>highest load detected</div>
+                </div>
+                <div style={{ background: 'linear-gradient(135deg, rgba(34,197,94,0.1) 0%, rgba(34,197,94,0.05) 100%)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: '10px', padding: '12px' }}>
+                  <div style={{ fontSize: '10px', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>Healthiest</div>
+                  <div style={{ fontSize: '18px', fontWeight: '700', color: '#22c55e' }}>{filtered.length > 0 ? filtered.sort((a, b) => a.queue - b.queue)[0].name : 'N/A'}</div>
+                  <div style={{ fontSize: '9px', color: '#6b7280', marginTop: '4px' }}>lowest queue depth</div>
+                </div>
+              </div>
+
+              {/* Individual backend status checks */}
+              <div style={{ marginTop: '14px', padding: '12px', background: 'rgba(15,23,42,0.4)', borderRadius: '10px', border: '1px solid rgba(34,211,238,0.1)' }}>
+                <div style={{ fontSize: '10px', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '10px' }}>📊 Backend Status</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px' }}>
+                  {filtered.map((backend) => (
+                    <div key={backend.name} style={{ background: 'rgba(30,41,59,0.6)', border: '1px solid rgba(34,211,238,0.15)', borderRadius: '8px', padding: '10px', fontSize: '12px' }}>
+                      <div style={{ fontWeight: '600', color: '#e0e7ff', marginBottom: '4px' }}>{backend.name}</div>
+                      <div style={{ fontSize: '11px', color: backend.queue > 2 ? '#f97316' : '#22c55e', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <span>{backend.queue > 2 ? '⚠️' : '✅'}</span>
+                        <span>Queue: <strong>{backend.queue}</strong></span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Cluster-wide health indicators */}
+              <div style={{ marginTop: '14px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                <div style={{ background: 'rgba(59,89,152,0.15)', border: '1px solid rgba(59,89,152,0.25)', borderRadius: '10px', padding: '12px' }}>
+                  <div style={{ fontSize: '10px', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>Active Backends</div>
+                  <div style={{ fontSize: '18px', fontWeight: '700', color: '#60a5fa' }}>{filtered.length}</div>
+                  <div style={{ fontSize: '9px', color: '#6b7280', marginTop: '4px' }}>responding & ready</div>
+                </div>
+                <div style={{ background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.25)', borderRadius: '10px', padding: '12px' }}>
+                  <div style={{ fontSize: '10px', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>System Health</div>
+                  <div style={{ fontSize: '18px', fontWeight: '700', color: '#a78bfa' }}>{filtered.filter(b => b.queue <= 2).length === filtered.length ? '🟢 Optimal' : filtered.filter(b => b.queue > 5).length === 0 ? '🟡 Good' : '🔴 Busy'}</div>
+                  <div style={{ fontSize: '9px', color: '#6b7280', marginTop: '4px' }}>cluster state</div>
+                </div>
+                <div style={{ background: 'rgba(168,85,247,0.15)', border: '1px solid rgba(168,85,247,0.25)', borderRadius: '10px', padding: '12px' }}>
+                  <div style={{ fontSize: '10px', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>Total Queued</div>
+                  <div style={{ fontSize: '18px', fontWeight: '700', color: '#d8b4fe' }}>{filtered.reduce((s, b) => s + b.queue, 0)}</div>
+                  <div style={{ fontSize: '9px', color: '#6b7280', marginTop: '4px' }}>jobs pending</div>
+                </div>
+              </div>
+            </motion.div>
+
+            <motion.div
+              className="qd-card"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.05 }}
+            >
+              <div className="qd-card-header-bar">
+                <div className="qd-card-header">
+                  <div>
+                    <div className="qd-card-title">QID Backend Recommendation</div>
+                    <div className="qd-card-sub">
+                      Scoring based on qubits, queue, and load balance
+                    </div>
+                  </div>
+                  <div className="qd-ai-pill" style={{ marginTop: 0 }}>
+                    <span className="qd-ai-dot" />
+                    QID OPTIMIZED
+                  </div>
+                </div>
+              </div>
+
+              <div className="qd-filter-row" style={{ marginTop: '16px', background: 'linear-gradient(90deg, rgba(34,211,238,0.05) 0%, rgba(139,92,246,0.05) 100%)', padding: '16px', borderRadius: '14px', border: '1px solid rgba(139,92,246,0.15)' }}>
+                <div className="qd-filter-group">
+                  <label style={{ fontSize: '11px', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px', display: 'block' }}>Min qubits</label>
+                  <input
+                    className="qd-filter-input"
+                    type="number"
+                    value={minQubits}
+                    onChange={(e) => setMinQubits(Number(e.target.value))}
+                    style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(34,211,238,0.3)', borderRadius: '8px', padding: '8px 12px', color: '#fff', fontSize: '13px' }}
+                  />
+                </div>
+                <div className="qd-filter-group">
+                  <label style={{ fontSize: '11px', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px', display: 'block' }}>Max queue</label>
+                  <input
+                    className="qd-filter-input"
+                    type="number"
+                    placeholder="no limit"
+                    value={maxQueue ?? ""}
+                    onChange={(e) =>
+                      setMaxQueue(
+                        e.target.value === "" ? null : Number(e.target.value)
+                      )
+                    }
+                    style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(34,211,238,0.3)', borderRadius: '8px', padding: '8px 12px', color: '#fff', fontSize: '13px' }}
+                  />
+                </div>
+                <div className="qd-filter-group">
+                  <label style={{ fontSize: '11px', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px', display: 'block' }}>Type</label>
+                  <select
+                    className="qd-filter-select"
+                    value={typeFilter}
+                    onChange={(e) => setTypeFilter(e.target.value)}
+                    style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(34,211,238,0.3)', borderRadius: '8px', padding: '8px 12px', color: '#fff', fontSize: '13px', cursor: 'pointer' }}
+                  >
+                    <option value="all">All</option>
+                    <option value="hardware">Hardware</option>
+                    <option value="simulator">Simulator</option>
+                  </select>
+                </div>
+                <div className="qd-filter-group">
+                  <label style={{ fontSize: '11px', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px', display: 'block' }}>Sort by</label>
+                  <select
+                    className="qd-filter-select"
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                    style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(34,211,238,0.3)', borderRadius: '8px', padding: '8px 12px', color: '#fff', fontSize: '13px', cursor: 'pointer' }}
+                  >
+                    <option value="queue">Queue (low → high)</option>
+                    <option value="qubits">Qubits (high → low)</option>
+                    <option value="score">AI Score</option>
+                  </select>
+                </div>
+                <div
+                  className="qd-filter-group"
+                  style={{ flex: 1, minWidth: 180 }}
                 >
-                  <div className="qd-card-header-bar">
-                    <div className="qd-card-header">
-                      <div>
-                        <div className="qd-card-title">Queue Overview</div>
-                        <div className="qd-card-sub">
-                          Real-time IBM Quantum cluster queue activity
-                        </div>
-                      </div>
-                      <span className="qd-live-pill">
-                        <span className="qd-live-dot" />
-                        LIVE
-                      </span>
-                    </div>
-                  </div>
+                  <label style={{ fontSize: '11px', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px', display: 'block' }}>Search backend</label>
+                  <input
+                    className="qd-filter-input"
+                    placeholder="Search by name..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(34,211,238,0.3)', borderRadius: '8px', padding: '8px 12px', color: '#fff', fontSize: '13px', width: '100%' }}
+                  />
+                </div>
+              </div>
 
-                  <div className="qd-chart-wrapper">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={filtered}>
-                        <CartesianGrid stroke="#3b3b74" strokeDasharray="4 4" />
-                        <XAxis dataKey="name" stroke="currentColor" />
-                        <YAxis stroke="currentColor" />
-                        <Tooltip content={<CustomTooltip />} />
-                        <Bar dataKey="queue" fill="#fb3cf8f7" radius={[7, 7, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-
-                  {/* Key metrics at a glance */}
-                  <div style={{ marginTop: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
-                    <div style={{ background: 'linear-gradient(135deg, rgba(34,211,238,0.1) 0%, rgba(34,211,238,0.05) 100%)', border: '1px solid rgba(34,211,238,0.2)', borderRadius: '10px', padding: '12px' }}>
-                      <div style={{ fontSize: '10px', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>Avg Queue</div>
-                      <div style={{ fontSize: '18px', fontWeight: '700', color: '#22d3ee' }}>{Math.round(filtered.reduce((s, b) => s + b.queue, 0) / (filtered.length || 1))}</div>
-                      <div style={{ fontSize: '9px', color: '#6b7280', marginTop: '4px' }}>across all backends</div>
-                    </div>
-                    <div style={{ background: 'linear-gradient(135deg, rgba(249,115,22,0.1) 0%, rgba(249,115,22,0.05) 100%)', border: '1px solid rgba(249,115,22,0.2)', borderRadius: '10px', padding: '12px' }}>
-                      <div style={{ fontSize: '10px', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>Peak Queue</div>
-                      <div style={{ fontSize: '18px', fontWeight: '700', color: '#f97316' }}>{Math.max(...filtered.map(b => b.queue), 0)}</div>
-                      <div style={{ fontSize: '9px', color: '#6b7280', marginTop: '4px' }}>highest load detected</div>
-                    </div>
-                    <div style={{ background: 'linear-gradient(135deg, rgba(34,197,94,0.1) 0%, rgba(34,197,94,0.05) 100%)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: '10px', padding: '12px' }}>
-                      <div style={{ fontSize: '10px', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>Healthiest</div>
-                      <div style={{ fontSize: '18px', fontWeight: '700', color: '#22c55e' }}>{filtered.length > 0 ? filtered.sort((a, b) => a.queue - b.queue)[0].name : 'N/A'}</div>
-                      <div style={{ fontSize: '9px', color: '#6b7280', marginTop: '4px' }}>lowest queue depth</div>
-                    </div>
-                  </div>
-
-                  {/* Individual backend status checks */}
-                  <div style={{ marginTop: '14px', padding: '12px', background: 'rgba(15,23,42,0.4)', borderRadius: '10px', border: '1px solid rgba(34,211,238,0.1)' }}>
-                    <div style={{ fontSize: '10px', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '10px' }}>📊 Backend Status</div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px' }}>
-                      {filtered.map((backend) => (
-                        <div key={backend.name} style={{ background: 'rgba(30,41,59,0.6)', border: '1px solid rgba(34,211,238,0.15)', borderRadius: '8px', padding: '10px', fontSize: '12px' }}>
-                          <div style={{ fontWeight: '600', color: '#e0e7ff', marginBottom: '4px' }}>{backend.name}</div>
-                          <div style={{ fontSize: '11px', color: backend.queue > 2 ? '#f97316' : '#22c55e', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <span>{backend.queue > 2 ? '⚠️' : '✅'}</span>
-                            <span>Queue: <strong>{backend.queue}</strong></span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Cluster-wide health indicators */}
-                  <div style={{ marginTop: '14px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
-                    <div style={{ background: 'rgba(59,89,152,0.15)', border: '1px solid rgba(59,89,152,0.25)', borderRadius: '10px', padding: '12px' }}>
-                      <div style={{ fontSize: '10px', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>Active Backends</div>
-                      <div style={{ fontSize: '18px', fontWeight: '700', color: '#60a5fa' }}>{filtered.length}</div>
-                      <div style={{ fontSize: '9px', color: '#6b7280', marginTop: '4px' }}>responding & ready</div>
-                    </div>
-                    <div style={{ background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.25)', borderRadius: '10px', padding: '12px' }}>
-                      <div style={{ fontSize: '10px', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>System Health</div>
-                      <div style={{ fontSize: '18px', fontWeight: '700', color: '#a78bfa' }}>{filtered.filter(b => b.queue <= 2).length === filtered.length ? '🟢 Optimal' : filtered.filter(b => b.queue > 5).length === 0 ? '🟡 Good' : '🔴 Busy'}</div>
-                      <div style={{ fontSize: '9px', color: '#6b7280', marginTop: '4px' }}>cluster state</div>
-                    </div>
-                    <div style={{ background: 'rgba(168,85,247,0.15)', border: '1px solid rgba(168,85,247,0.25)', borderRadius: '10px', padding: '12px' }}>
-                      <div style={{ fontSize: '10px', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>Total Queued</div>
-                      <div style={{ fontSize: '18px', fontWeight: '700', color: '#d8b4fe' }}>{filtered.reduce((s, b) => s + b.queue, 0)}</div>
-                      <div style={{ fontSize: '9px', color: '#6b7280', marginTop: '4px' }}>jobs pending</div>
-                    </div>
-                  </div>
-                </motion.div>
-
-                <motion.div
-                  className="qd-card"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.05 }}
-                >
-                  <div className="qd-card-header-bar">
-                    <div className="qd-card-header">
-                      <div>
-                        <div className="qd-card-title">QID Backend Recommendation</div>
-                        <div className="qd-card-sub">
-                          Scoring based on qubits, queue, and load balance
-                        </div>
-                      </div>
-                      <div className="qd-ai-pill" style={{marginTop: 0}}>
-                        <span className="qd-ai-dot" />
-                        QID OPTIMIZED
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="qd-filter-row" style={{ marginTop: '16px', background: 'linear-gradient(90deg, rgba(34,211,238,0.05) 0%, rgba(139,92,246,0.05) 100%)', padding: '16px', borderRadius: '14px', border: '1px solid rgba(139,92,246,0.15)' }}>
-                    <div className="qd-filter-group">
-                      <label style={{ fontSize: '11px', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px', display: 'block' }}>Min qubits</label>
-                      <input
-                        className="qd-filter-input"
-                        type="number"
-                        value={minQubits}
-                        onChange={(e) => setMinQubits(Number(e.target.value))}
-                        style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(34,211,238,0.3)', borderRadius: '8px', padding: '8px 12px', color: '#fff', fontSize: '13px' }}
-                      />
-                    </div>
-                    <div className="qd-filter-group">
-                      <label style={{ fontSize: '11px', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px', display: 'block' }}>Max queue</label>
-                      <input
-                        className="qd-filter-input"
-                        type="number"
-                        placeholder="no limit"
-                        value={maxQueue ?? ""}
-                        onChange={(e) =>
-                          setMaxQueue(
-                            e.target.value === "" ? null : Number(e.target.value)
-                          )
-                        }
-                        style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(34,211,238,0.3)', borderRadius: '8px', padding: '8px 12px', color: '#fff', fontSize: '13px' }}
-                      />
-                    </div>
-                    <div className="qd-filter-group">
-                      <label style={{ fontSize: '11px', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px', display: 'block' }}>Type</label>
-                      <select
-                        className="qd-filter-select"
-                        value={typeFilter}
-                        onChange={(e) => setTypeFilter(e.target.value)}
-                        style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(34,211,238,0.3)', borderRadius: '8px', padding: '8px 12px', color: '#fff', fontSize: '13px', cursor: 'pointer' }}
-                      >
-                        <option value="all">All</option>
-                        <option value="hardware">Hardware</option>
-                        <option value="simulator">Simulator</option>
-                      </select>
-                    </div>
-                    <div className="qd-filter-group">
-                      <label style={{ fontSize: '11px', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px', display: 'block' }}>Sort by</label>
-                      <select
-                        className="qd-filter-select"
-                        value={sortBy}
-                        onChange={(e) => setSortBy(e.target.value)}
-                        style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(34,211,238,0.3)', borderRadius: '8px', padding: '8px 12px', color: '#fff', fontSize: '13px', cursor: 'pointer' }}
-                      >
-                        <option value="queue">Queue (low → high)</option>
-                        <option value="qubits">Qubits (high → low)</option>
-                        <option value="score">AI Score</option>
-                      </select>
-                    </div>
-                    <div
-                      className="qd-filter-group"
-                      style={{ flex: 1, minWidth: 180 }}
-                    >
-                      <label style={{ fontSize: '11px', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px', display: 'block' }}>Search backend</label>
-                      <input
-                        className="qd-filter-input"
-                        placeholder="Search by name..."
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(34,211,238,0.3)', borderRadius: '8px', padding: '8px 12px', color: '#fff', fontSize: '13px', width: '100%' }}
-                      />
-                    </div>
-                  </div>
-
-                  {recommendation ? (
-                    <>
-                      {/* ===== ENHANCED RECOMMENDATION CARD ===== */}
-                      <div style={{ marginTop: 16, marginBottom: 20 }}>
-                        {/* Main Recommendation - Premium Card */}
-                        <div style={{
-                          background: 'linear-gradient(135deg, rgba(34,211,238,0.15) 0%, rgba(139,92,246,0.1) 100%)',
-                          border: '2px solid rgba(34,211,238,0.4)',
-                          borderRadius: '18px',
-                          padding: '20px',
-                          marginBottom: '16px',
-                          position: 'relative',
-                          overflow: 'hidden',
-                          backdropFilter: 'blur(12px)',
-                        }}>
-                          {/* Glow effect behind card */}
-                          <div style={{
-                            position: 'absolute',
-                            top: '-50%',
-                            right: '-50%',
-                            width: '300px',
-                            height: '300px',
-                            background: 'radial-gradient(circle, rgba(34,211,238,0.2) 0%, transparent 70%)',
-                            borderRadius: '50%',
-                            pointerEvents: 'none',
-                          }} />
-                          
-                          <div style={{ position: 'relative', zIndex: 1 }}>
-                            {/* Header with badge */}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                              <div>
-                                <div style={{ fontSize: '13px', color: '#22d3ee', fontWeight: '600', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '6px' }}>
-                                  ✨ Top Recommendation
-                                </div>
-                                <div style={{ fontSize: '28px', fontWeight: '800', background: 'linear-gradient(90deg, #fff, #22d3ee)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', color: 'transparent', fontFamily: 'Space Grotesk, sans-serif' }}>
-                                  {recommendation.name}
-                                </div>
-                              </div>
-                              <div style={{
-                                background: 'linear-gradient(135deg, #22d3ee, #06b6d4)',
-                                padding: '8px 16px',
-                                borderRadius: '20px',
-                                fontSize: '12px',
-                                fontWeight: '700',
-                                color: '#000',
-                                boxShadow: '0 0 20px rgba(34,211,238,0.5)',
-                              }}>
-                                🎯 OPTIMAL
-                              </div>
-                            </div>
-
-                            {/* Core metrics */}
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '16px' }}>
-                              <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(34,211,238,0.2)', borderRadius: '12px', padding: '12px', textAlign: 'center' }}>
-                                <div style={{ fontSize: '11px', color: '#9ca3af', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Qubits</div>
-                                <div style={{ fontSize: '20px', fontWeight: '700', color: '#22d3ee' }}>{recommendation.qubits}</div>
-                              </div>
-                              <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(34,211,238,0.2)', borderRadius: '12px', padding: '12px', textAlign: 'center' }}>
-                                <div style={{ fontSize: '11px', color: '#9ca3af', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Queue Depth</div>
-                                <div style={{ fontSize: '20px', fontWeight: '700', color: '#4ade80' }}>{recommendation.queue}</div>
-                              </div>
-                              <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(34,211,238,0.2)', borderRadius: '12px', padding: '12px', textAlign: 'center' }}>
-                                <div style={{ fontSize: '11px', color: '#9ca3af', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Type</div>
-                                <div style={{ fontSize: '16px', fontWeight: '700', color: '#a78bfa' }}>{recommendation.type}</div>
-                              </div>
-                            </div>
-
-                            {/* Why this backend section */}
-                            <div style={{ background: 'rgba(0,0,0,0.3)', borderLeft: '3px solid #22d3ee', borderRadius: '8px', padding: '12px', fontSize: '13px', color: '#e5e7eb', lineHeight: '1.6', fontStyle: 'italic' }}>
-                              <strong style={{ color: '#22d3ee' }}>Why chosen:</strong> Optimal balance of queue depth, circuit capacity, and hardware reliability. Minimized cost score with highest confidence rating.
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Score breakdown bars */}
-                        <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(139,92,246,0.2)', borderRadius: '14px', padding: '14px', marginBottom: '16px' }}>
-                          <div style={{ fontSize: '12px', fontWeight: '700', color: '#9ca3af', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>📊 Score Components</div>
-                          
-                          {/* Queue Depth Score */}
-                          <div style={{ marginBottom: '10px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', fontSize: '12px' }}>
-                              <span style={{ color: '#cbd5e1' }}>Queue Depth Impact</span>
-                              <span style={{ color: '#4ade80', fontWeight: '600' }}>Low</span>
-                            </div>
-                            <div style={{ height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
-                              <div style={{ height: '100%', width: '20%', background: 'linear-gradient(90deg, #4ade80, #22c55e)', borderRadius: '3px' }} />
-                            </div>
-                          </div>
-
-                          {/* Complexity Score */}
-                          <div style={{ marginBottom: '10px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', fontSize: '12px' }}>
-                              <span style={{ color: '#cbd5e1' }}>Circuit Complexity</span>
-                              <span style={{ color: '#fbbf24', fontWeight: '600' }}>Medium</span>
-                            </div>
-                            <div style={{ height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
-                              <div style={{ height: '100%', width: '45%', background: 'linear-gradient(90deg, #fbbf24, #f59e0b)', borderRadius: '3px' }} />
-                            </div>
-                          </div>
-
-                          {/* Error Rate Score */}
-                          <div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', fontSize: '12px' }}>
-                              <span style={{ color: '#cbd5e1' }}>Hardware Error Rate</span>
-                              <span style={{ color: '#60a5fa', fontWeight: '600' }}>Very Low</span>
-                            </div>
-                            <div style={{ height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
-                              <div style={{ height: '100%', width: '15%', background: 'linear-gradient(90deg, #60a5fa, #3b82f6)', borderRadius: '3px' }} />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <p style={{ marginTop: 12, fontSize: 12, color: '#9ca3af' }}>
-                      🔍 No backend matches your filters. Try adjusting the criteria.
-                    </p>
-                  )}
-
-                  <div style={{ marginTop: 16, display: "flex", gap: 8, flexWrap: 'wrap' }}>
-                    <button className="qd-export-btn" onClick={handleExport} style={{
-                      background: 'linear-gradient(135deg, #06b6d4 0%, #22d3ee 100%)',
-                      color: '#000',
-                      padding: '10px 20px',
-                      borderRadius: '10px',
-                      border: 'none',
-                      fontWeight: '700',
-                      fontSize: '13px',
-                      cursor: 'pointer',
-                      transition: 'all 0.3s ease',
-                      boxShadow: '0 4px 15px rgba(34,211,238,0.3)',
-                    }} onMouseEnter={(e) => {
-                      e.target.style.transform = 'translateY(-2px)';
-                      e.target.style.boxShadow = '0 6px 25px rgba(34,211,238,0.5)';
-                    }} onMouseLeave={(e) => {
-                      e.target.style.transform = 'translateY(0)';
-                      e.target.style.boxShadow = '0 4px 15px rgba(34,211,238,0.3)';
+              {recommendation ? (
+                <>
+                  {/* ===== ENHANCED RECOMMENDATION CARD ===== */}
+                  <div style={{ marginTop: 16, marginBottom: 20 }}>
+                    {/* Main Recommendation - Premium Card */}
+                    <div style={{
+                      background: 'linear-gradient(135deg, rgba(34,211,238,0.15) 0%, rgba(139,92,246,0.1) 100%)',
+                      border: '2px solid rgba(34,211,238,0.4)',
+                      borderRadius: '18px',
+                      padding: '20px',
+                      marginBottom: '16px',
+                      position: 'relative',
+                      overflow: 'hidden',
+                      backdropFilter: 'blur(12px)',
                     }}>
-                      📥 Export Report (JSON)
+                      {/* Glow effect behind card */}
+                      <div style={{
+                        position: 'absolute',
+                        top: '-50%',
+                        right: '-50%',
+                        width: '300px',
+                        height: '300px',
+                        background: 'radial-gradient(circle, rgba(34,211,238,0.2) 0%, transparent 70%)',
+                        borderRadius: '50%',
+                        pointerEvents: 'none',
+                      }} />
+
+                      <div style={{ position: 'relative', zIndex: 1 }}>
+                        {/* Header with badge */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                          <div>
+                            <div style={{ fontSize: '13px', color: '#22d3ee', fontWeight: '600', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '6px' }}>
+                              ✨ Top Recommendation
+                            </div>
+                            <div style={{ fontSize: '28px', fontWeight: '800', background: 'linear-gradient(90deg, #fff, #22d3ee)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', color: 'transparent', fontFamily: 'Space Grotesk, sans-serif' }}>
+                              {recommendation.name}
+                            </div>
+                          </div>
+                          <div style={{
+                            background: 'linear-gradient(135deg, #22d3ee, #06b6d4)',
+                            padding: '8px 16px',
+                            borderRadius: '20px',
+                            fontSize: '12px',
+                            fontWeight: '700',
+                            color: '#000',
+                            boxShadow: '0 0 20px rgba(34,211,238,0.5)',
+                          }}>
+                            🎯 OPTIMAL
+                          </div>
+                        </div>
+
+                        {/* Core metrics */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '16px' }}>
+                          <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(34,211,238,0.2)', borderRadius: '12px', padding: '12px', textAlign: 'center' }}>
+                            <div style={{ fontSize: '11px', color: '#9ca3af', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Qubits</div>
+                            <div style={{ fontSize: '20px', fontWeight: '700', color: '#22d3ee' }}>{recommendation.qubits}</div>
+                          </div>
+                          <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(34,211,238,0.2)', borderRadius: '12px', padding: '12px', textAlign: 'center' }}>
+                            <div style={{ fontSize: '11px', color: '#9ca3af', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Queue Depth</div>
+                            <div style={{ fontSize: '20px', fontWeight: '700', color: '#4ade80' }}>{recommendation.queue}</div>
+                          </div>
+                          <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(34,211,238,0.2)', borderRadius: '12px', padding: '12px', textAlign: 'center' }}>
+                            <div style={{ fontSize: '11px', color: '#9ca3af', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Type</div>
+                            <div style={{ fontSize: '16px', fontWeight: '700', color: '#a78bfa' }}>{recommendation.type}</div>
+                          </div>
+                        </div>
+
+                        {/* Why this backend section */}
+                        <div style={{ background: 'rgba(0,0,0,0.3)', borderLeft: '3px solid #22d3ee', borderRadius: '8px', padding: '12px', fontSize: '13px', color: '#e5e7eb', lineHeight: '1.6', fontStyle: 'italic' }}>
+                          <strong style={{ color: '#22d3ee' }}>Why chosen:</strong> Optimal balance of queue depth, circuit capacity, and hardware reliability. Minimized cost score with highest confidence rating.
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Score breakdown bars */}
+                    <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(139,92,246,0.2)', borderRadius: '14px', padding: '14px', marginBottom: '16px' }}>
+                      <div style={{ fontSize: '12px', fontWeight: '700', color: '#9ca3af', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>📊 Score Components</div>
+
+                      {/* Queue Depth Score */}
+                      <div style={{ marginBottom: '10px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', fontSize: '12px' }}>
+                          <span style={{ color: '#cbd5e1' }}>Queue Depth Impact</span>
+                          <span style={{ color: '#4ade80', fontWeight: '600' }}>Low</span>
+                        </div>
+                        <div style={{ height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: '20%', background: 'linear-gradient(90deg, #4ade80, #22c55e)', borderRadius: '3px' }} />
+                        </div>
+                      </div>
+
+                      {/* Complexity Score */}
+                      <div style={{ marginBottom: '10px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', fontSize: '12px' }}>
+                          <span style={{ color: '#cbd5e1' }}>Circuit Complexity</span>
+                          <span style={{ color: '#fbbf24', fontWeight: '600' }}>Medium</span>
+                        </div>
+                        <div style={{ height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: '45%', background: 'linear-gradient(90deg, #fbbf24, #f59e0b)', borderRadius: '3px' }} />
+                        </div>
+                      </div>
+
+                      {/* Error Rate Score */}
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', fontSize: '12px' }}>
+                          <span style={{ color: '#cbd5e1' }}>Hardware Error Rate</span>
+                          <span style={{ color: '#60a5fa', fontWeight: '600' }}>Very Low</span>
+                        </div>
+                        <div style={{ height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: '15%', background: 'linear-gradient(90deg, #60a5fa, #3b82f6)', borderRadius: '3px' }} />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <p style={{ marginTop: 12, fontSize: 12, color: '#9ca3af' }}>
+                  🔍 No backend matches your filters. Try adjusting the criteria.
+                </p>
+              )}
+
+              <div style={{ marginTop: 16, display: "flex", gap: 8, flexWrap: 'wrap' }}>
+                <button className="qd-export-btn" onClick={handleExport} style={{
+                  background: 'linear-gradient(135deg, #06b6d4 0%, #22d3ee 100%)',
+                  color: '#000',
+                  padding: '10px 20px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  fontWeight: '700',
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease',
+                  boxShadow: '0 4px 15px rgba(34,211,238,0.3)',
+                }} onMouseEnter={(e) => {
+                  e.target.style.transform = 'translateY(-2px)';
+                  e.target.style.boxShadow = '0 6px 25px rgba(34,211,238,0.5)';
+                }} onMouseLeave={(e) => {
+                  e.target.style.transform = 'translateY(0)';
+                  e.target.style.boxShadow = '0 4px 15px rgba(34,211,238,0.3)';
+                }}>
+                  📥 Export Report (JSON)
+                </button>
+              </div>
+            </motion.div>
+          </div>
+
+          {/* MID ROW: All Backends Card Grid */}
+          <motion.div
+            className="qd-card"
+            style={{ marginBottom: 22 }}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <div className="qd-card-header-bar">
+              <div className="qd-card-header">
+                <div>
+                  <div className="qd-card-title">All Backends</div>
+                  <div className="qd-card-sub">
+                    View all backends. Click a card to
+                    inspect.
+                  </div>
+                </div>
+                <span className="qd-mini-tag">
+                  HORIZONTAL SCROLL • SELECT • COMPARE
+                </span>
+              </div>
+            </div>
+
+            <div className="qd-backend-grid" style={{ marginTop: '0px' }}>
+              {filtered.map((b) => {
+                const isSelected = selected?.id === b.id;
+                const isComparing = compareIds.includes(b.id);
+
+                return (
+                  <motion.div
+                    key={b.id}
+                    className={`qd-card qd-backend-card ${isSelected ? "qd-backend-card-selected" : ""
+                      } ${isComparing ? "qd-backend-card-selected" : ""} qd-backend-status-${b.status
+                      }`}
+                    onClick={() => {
+                      setSelectedId(b.id);
+                    }}
+                    initial={{ opacity: 0, scale: 0.98 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    whileHover={{ scale: 1.01, transition: { duration: 0.1 } }}
+                  >
+                    <div>
+                      <div className="qd-backend-header">
+                        <div className="qd-backend-name">{b.name}</div>
+                        <div className="qd-backend-version">{b.version}</div>
+                      </div>
+                      <div className="qd-backend-type">{b.type}</div>
+
+                      <div className="qd-backend-info">
+                        <div className="qd-backend-info-item">
+                          <div className="qd-backend-info-label">Qubits</div>
+                          <div className="qd-backend-info-value">
+                            {/* Animated number counter */}
+                            <CountUp end={b.qubits} />
+                          </div>
+                        </div>
+                        <div className="qd-backend-info-item">
+                          <div className="qd-backend-info-label">Queue</div>
+                          <div className="qd-backend-info-value">
+                            {/* Animated number counter */}
+                            <CountUp end={b.queue} />
+                          </div>
+                        </div>
+                        <div className="qd-backend-info-item">
+                          <div className="qd-backend-info-label">Status</div>
+                          <div className="qd-backend-status-value">
+                            {b.status.charAt(0).toUpperCase() + b.status.slice(1)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="qd-backend-active">
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={compareIds.includes(b.id)}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            toggleCompare(b.id);
+                          }}
+                          style={{ marginRight: 6 }}
+                        />
+                        Compare Backend
+                      </label>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </motion.div>
+
+          {/* Historical trends and detailed backend analysis */}
+          <div className="qd-row" style={{ marginBottom: 22 }}>
+            {/* Queue History Chart */}
+            <motion.div
+              className="qd-card"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+            >
+              <div className="qd-card-header-bar">
+                <div className="qd-card-header">
+                  <div>
+                    <div className="qd-card-title">
+                      Queue History: {selectedName || "Select a Backend"}
+                    </div>
+                    <div className="qd-card-sub">
+                      Live job queue trend over the last recorded period (time based
+                      on snapshot timestamps).
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div
+                className="qd-chart-wrapper"
+                style={{ height: 200, marginTop: 16 }}
+              >
+                {historyLoading ? (
+                  <p
+                    style={{
+                      textAlign: "center",
+                      paddingTop: 50,
+                      fontSize: 14,
+                    }}
+                  >
+                    Loading historical data...
+                  </p>
+                ) : selectedName ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart
+                      data={(rawQueueHistory || []).map((d) => {
+                        const rawDateStr = d.date || ""; 
+                        let cleanDisplayDate = rawDateStr;
+                        
+                        if (rawDateStr) {
+                          const dateObj = new Date(rawDateStr);
+                          if (!isNaN(dateObj.getTime())) {
+                            cleanDisplayDate = dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+                          }
+                        }
+
+                        return {
+                          displayDate: cleanDisplayDate, 
+                          queue: d.queue_length || 0, 
+                        };
+                      })}
+                    >
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        stroke="#3b3b74"
+                      />
+                      <XAxis
+                        dataKey="displayDate"
+                        stroke="currentColor"
+                        tick={{ fontSize: 11 }}
+                      />
+                      <YAxis stroke="currentColor" />
+                      <Tooltip
+                        content={LineChartCustomTooltip}
+                      />
+                      <Legend />
+                      <Line
+                        type="monotone"
+                        dataKey="queue"
+                        stroke="#38bdf8"
+                        strokeWidth={2}
+                        dot={{ r: 2, fill: "#38bdf8", strokeWidth: 0 }}
+                        activeDot={{ r: 5, fill: "#fb3cf8" }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <p
+                    style={{
+                      textAlign: "center",
+                      paddingTop: 50,
+                      opacity: 0.7,
+                    }}
+                  >
+                    Please select a backend from the horizontal list above to view
+                    its queue history.
+                  </p>
+                )}
+              </div>
+
+              {selectedName && (
+                <button
+                  className="qd-export-btn"
+                  onClick={handleHistoryExport}
+                  style={{ marginTop: 10 }}
+                >
+                  Download Queue History (JSON)
+                </button>
+              )}
+            </motion.div>
+
+            {/* Deep view card with 3 tabs */}
+            <motion.div
+              className="qd-card"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.05 }}
+            >
+              <div className="qd-card-header-bar">
+                <div className="qd-card-header">
+                  <div>
+                    <div className="qd-card-title">
+                      {selectedName || "Backend Deep View"}
+                    </div>
+                    <div className="qd-card-sub">
+                      Queue prediction, full details & calibration analytics for the
+                      selected backend.
+                    </div>
+                  </div>
+                  <div className="qd-tab-row">
+                    <button
+                      className={
+                        "qd-tab-pill" +
+                        (detailTab === "prediction" ? " active" : "")
+                      }
+                      onClick={() => setDetailTab("prediction")}
+                    >
+                      Prediction
+                    </button>
+                    <button
+                      className={
+                        "qd-tab-pill" + (detailTab === "details" ? " active" : "")
+                      }
+                      onClick={() => setDetailTab("details")}
+                    >
+                      Details
+                    </button>
+                    <button
+                      className={
+                        "qd-tab-pill" +
+                        (detailTab === "analytics" ? " active" : "")
+                      }
+                      onClick={() => setDetailTab("analytics")}
+                    >
+                      Analytics
                     </button>
                   </div>
-                </motion.div>
+                </div>
               </div>
 
-              {/* MID ROW: All Backends Card Grid */}
-              <motion.div
-                className="qd-card"
-                style={{ marginBottom: 22 }}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-              >
-                <div className="qd-card-header-bar">
-                  <div className="qd-card-header">
-                    <div>
-                      <div className="qd-card-title">All Backends</div>
-                      <div className="qd-card-sub">
-                        View all backends. Click a card to
-                        inspect.
-                      </div>
-                    </div>
-                    <span className="qd-mini-tag">
-                      HORIZONTAL SCROLL • SELECT • COMPARE
-                    </span>
+              {!selected ? (
+                <p style={{ fontSize: 12, marginTop: 8 }}>
+                  Select any backend from the list above to view information.
+                </p>
+              ) : detailTab === "prediction" ? (
+                <>
+                  <div style={{ fontSize: 12, marginTop: 6 }}>
+                    <strong>{selected.name}</strong> • {selected.qubits} qubits •
+                    queue {selected.queue}
                   </div>
-                </div>
 
-                <div className="qd-backend-grid" style={{ marginTop: '0px' }}>
-                  {filtered.map((b) => {
-                    const isSelected = selected?.id === b.id;
-                    const isComparing = compareIds.includes(b.id);
-
-                    return (
-                      <motion.div
-                        key={b.id}
-                        className={`qd-card qd-backend-card ${
-                          isSelected ? "qd-backend-card-selected" : ""
-                        } ${isComparing ? "qd-backend-card-selected" : ""} qd-backend-status-${
-                          b.status
-                        }`}
-                        onClick={() => {
-                          setSelectedId(b.id);
+                  {predictionLoading ? (
+                    <p style={{ marginTop: 16, fontSize: 14 }}>
+                      Analyzing queue metrics for live prediction...
+                    </p>
+                  ) : predictionError || !waitPrediction?.ok ? (
+                    <p
+                      style={{
+                        marginTop: 16,
+                        fontSize: 14,
+                        color: "#f87171",
+                      }}
+                    >
+                      Prediction unavailable:{" "}
+                      {waitPrediction?.error || "Error fetching data."}
+                    </p>
+                  ) : (
+                    <div style={{ marginTop: 16 }}>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          opacity: 0.8,
+                          marginBottom: 4,
                         }}
-                        initial={{ opacity: 0, scale: 0.98 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        whileHover={{ scale: 1.01, transition: { duration: 0.1 } }}
+                      >
+                        ESTIMATED WAIT TIME (Median Queue-based)
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 40,
+                          fontWeight: 700,
+                          color: "#38bdf8",
+                          lineHeight: 1,
+                        }}
+                      >
+                        {formatSeconds(waitPrediction.estimate_seconds)}
+                      </div>
+
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "1fr 1fr",
+                          gap: 10,
+                          marginTop: 10,
+                          paddingTop: 10,
+                          borderTop: "1px solid rgba(148,163,255,0.4)",
+                        }}
                       >
                         <div>
-                          <div className="qd-backend-header">
-                            <div className="qd-backend-name">{b.name}</div>
-                            <div className="qd-backend-version">{b.version}</div>
+                          <div
+                            style={{ fontSize: 11, opacity: 0.7 }}
+                          >
+                            Jobs Analyzed (Last 7d)
                           </div>
-                          <div className="qd-backend-type">{b.type}</div>
-
-                          <div className="qd-backend-info">
-                            <div className="qd-backend-info-item">
-                              <div className="qd-backend-info-label">Qubits</div>
-                              <div className="qd-backend-info-value">
-                                {/* Animated number counter */}
-                                <CountUp end={b.qubits} />
-                              </div>
-                            </div>
-                            <div className="qd-backend-info-item">
-                              <div className="qd-backend-info-label">Queue</div>
-                              <div className="qd-backend-info-value">
-                                {/* Animated number counter */}
-                                <CountUp end={b.queue} />
-                              </div>
-                            </div>
-                            <div className="qd-backend-info-item">
-                              <div className="qd-backend-info-label">Status</div>
-                              <div className="qd-backend-status-value">
-                                {b.status.charAt(0).toUpperCase() + b.status.slice(1)}
-                              </div>
-                            </div>
+                          <div
+                            style={{ fontSize: 18, fontWeight: 600 }}
+                          >
+                            {waitPrediction.sample_size ?? "—"}
                           </div>
                         </div>
-
-                        <div className="qd-backend-active">
-                          <label>
-                            <input
-                              type="checkbox"
-                              checked={compareIds.includes(b.id)}
-                              onChange={(e) => {
-                                e.stopPropagation();
-                                toggleCompare(b.id);
-                              }}
-                              style={{ marginRight: 6 }}
-                            />
-                            Compare Backend
-                          </label>
-                        </div>
-                      </motion.div>
-                    );
-                  })}
-                </div>
-              </motion.div>
-
-              {/* Historical trends and detailed backend analysis */}
-              <div className="qd-row" style={{ marginBottom: 22 }}>
-                {/* Queue History Chart */}
-                <motion.div
-                  className="qd-card"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1 }}
-                >
-                  <div className="qd-card-header-bar">
-                    <div className="qd-card-header">
-                      <div>
-                        <div className="qd-card-title">
-                          Queue History: {selectedName || "Select a Backend"}
-                        </div>
-                        <div className="qd-card-sub">
-                          Live job queue trend over the last recorded period (time based
-                          on snapshot timestamps).
+                        <div>
+                          <div
+                            style={{ fontSize: 11, opacity: 0.7 }}
+                          >
+                            Current Queue
+                          </div>
+                          <div
+                            style={{ fontSize: 18, fontWeight: 600 }}
+                          >
+                            {selected.queue} jobs
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-
-                  <div
-                    className="qd-chart-wrapper"
-                    style={{ height: 200, marginTop: 16 }}
-                  >
-                    {historyLoading ? (
-                      <p
-                        style={{
-                          textAlign: "center",
-                          paddingTop: 50,
-                          fontSize: 14,
-                        }}
-                      >
-                        Loading historical data...
-                      </p>
-                    ) : selectedName ? (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart
-                          data={(rawQueueHistory || []).map((d) => ({
-                            time: d.snapshot_time,
-                            queue: d.queue_length || 0,
-                          }))}
-                        >
-                          <CartesianGrid
-                            strokeDasharray="3 3"
-                            stroke="#3b3b74"
-                          />
-                          <XAxis
-  dataKey="time"
-  stroke="currentColor"
-  tick={{ fontSize: 12 }}
-  tickFormatter={(ts) => {
-    const date = new Date(ts * 1000);
-    // Format time with AM/PM
-    let hours = date.getHours();
-    const minutes = date.getMinutes();
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    hours = hours % 12;
-    hours = hours ? hours : 12; // the hour '0' should be '12'
-    const minutesStr = minutes < 10 ? '0' + minutes : minutes;
-    return `${hours}:${minutesStr} ${ampm}`;
-  }} 
-/>
-
-                          <YAxis stroke="currentColor" />
-                          <Tooltip
-                            // IMPORTANT: Use the custom component defined above for the transparent background
-                            content={LineChartCustomTooltip} 
-                          />
-                          <Legend />
-                          <Line
-                            type="monotone"
-                            dataKey="queue"
-                            stroke="#8884d8"
-                            dot={false}
-                          />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <p
-                        style={{
-                          textAlign: "center",
-                          paddingTop: 50,
-                          opacity: 0.7,
-                        }}
-                      >
-                        Please select a backend from the horizontal list above to view
-                        its queue history.
-                      </p>
-                    )}
-                  </div>
-
-                  {selectedName && (
-                    <button
-                      className="qd-export-btn"
-                      onClick={handleHistoryExport}
-                      style={{ marginTop: 10 }}
-                    >
-                      Download Queue History (JSON)
-                    </button>
                   )}
-                </motion.div>
 
-                {/* Deep view card with 3 tabs */}
-                <motion.div
-                  className="qd-card"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.05 }}
-                >
-                  <div className="qd-card-header-bar">
-                    <div className="qd-card-header">
-                      <div>
-                        <div className="qd-card-title">
-                          {selectedName || "Backend Deep View"}
-                        </div>
-                        <div className="qd-card-sub">
-                          Queue prediction, full details & calibration analytics for the
-                          selected backend.
-                        </div>
-                      </div>
-                      <div className="qd-tab-row">
-                        <button
-                          className={
-                            "qd-tab-pill" +
-                            (detailTab === "prediction" ? " active" : "")
-                          }
-                          onClick={() => setDetailTab("prediction")}
-                        >
-                          Prediction
-                        </button>
-                        <button
-                          className={
-                            "qd-tab-pill" + (detailTab === "details" ? " active" : "")
-                          }
-                          onClick={() => setDetailTab("details")}
-                        >
-                          Details
-                        </button>
-                        <button
-                          className={
-                            "qd-tab-pill" +
-                            (detailTab === "analytics" ? " active" : "")
-                          }
-                          onClick={() => setDetailTab("analytics")}
-                        >
-                          Analytics
-                        </button>
-                      </div>
-                    </div>
+                  <div style={{ marginTop: 8, fontSize: 11 }}>
+                    <strong>Circuit suggestion:</strong>{" "}
+                    {selected.qubits >= 20
+                      ? "Good candidate for deep QFT, VQE, or larger QAOA experiments."
+                      : selected.qubits >= 5
+                        ? "Ideal for mid-sized algorithms: small QAOA, 3–5 qubit GHZ, or variational demos."
+                        : "Perfect for Bell pairs, basic gates exploration and beginner circuits."}
                   </div>
-
-                  {!selected ? (
-                    <p style={{ fontSize: 12, marginTop: 8 }}>
-                      Select any backend from the list above to view information.
-                    </p>
-                  ) : detailTab === "prediction" ? (
+                </>
+              ) : detailTab === "details" ? (
+                <div style={{ marginTop: 8, fontSize: 11 }}>
+                  {detailsLoading && <p>Loading backend details…</p>}
+                  {detailsError && (
+                    <p>Failed to load details for {selectedName}.</p>
+                  )}
+                  {!detailsLoading && !detailsError && (
                     <>
-                      <div style={{ fontSize: 12, marginTop: 6 }}>
-                        <strong>{selected.name}</strong> • {selected.qubits} qubits •
-                        queue {selected.queue}
-                      </div>
-
-                      {predictionLoading ? (
-                        <p style={{ marginTop: 16, fontSize: 14 }}>
-                          Analyzing queue metrics for live prediction...
-                        </p>
-                      ) : predictionError || !waitPrediction?.ok ? (
-                        <p
-                          style={{
-                            marginTop: 16,
-                            fontSize: 14,
-                            color: "#f87171",
-                          }}
-                        >
-                          Prediction unavailable:{" "}
-                          {waitPrediction?.error || "Error fetching data."}
-                        </p>
-                      ) : (
-                        <div style={{ marginTop: 16 }}>
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "1.4fr 1.6fr",
+                          gap: 10,
+                        }}
+                      >
+                        <div>
                           <div
-                            style={{
-                              fontSize: 12,
-                              opacity: 0.8,
-                              marginBottom: 4,
-                            }}
+                            style={{ fontSize: 12, opacity: 0.8 }}
                           >
-                            ESTIMATED WAIT TIME (Median Queue-based)
+                            BASIC INFO
                           </div>
                           <div
-                            style={{
-                              fontSize: 40,
-                              fontWeight: 700,
-                              color: "#38bdf8",
-                              lineHeight: 1,
-                            }}
+                            style={{ fontSize: 20, fontWeight: 600 }}
                           >
-                            {formatSeconds(waitPrediction.estimate_seconds)}
+                            {basic.name || selectedName}
                           </div>
-
                           <div
-                            style={{
-                              display: "grid",
-                              gridTemplateColumns: "1fr 1fr",
-                              gap: 10,
-                              marginTop: 10,
-                              paddingTop: 10,
-                              borderTop: "1px solid rgba(148,163,255,0.4)",
-                            }}
+                            style={{ fontSize: 11, opacity: 0.8 }}
                           >
+                            {basic.description || "IBM Quantum backend"}
+                          </div>
+                          <div
+                            style={{ marginTop: 6, fontSize: 11 }}
+                          >
+                            Version:{" "}
+                            <strong>
+                              {basic.backend_version ||
+                                selected.version ||
+                                "-"}
+                            </strong>
+                            <br />
+                            Qubits:{" "}
+                            <strong>
+                              {basic.num_qubits || selected.qubits}
+                            </strong>
+                            <br />
+                            Simulator:{" "}
+                            <strong>
+                              {basic.simulator ? "Yes" : "No"}
+                            </strong>
+                            <br />
+                            Pending jobs:{" "}
+                            <strong>
+                              {status.pending_jobs ?? selected.queue}
+                            </strong>
+                          </div>
+                        </div>
+                        <div>
+                          <div
+                            style={{ fontSize: 12, opacity: 0.8 }}
+                          >
+                            CONFIGURATION SNAPSHOT
+                          </div>
+                          <div style={{ marginTop: 6 }}>
                             <div>
-                              <div
-                                style={{ fontSize: 11, opacity: 0.7 }}
-                              >
-                                Median Queue Length
-                              </div>
-                              <div
-                                style={{ fontSize: 18, fontWeight: 600 }}
-                              >
-                                {waitPrediction.median_queue_length} jobs
-                              </div>
+                              <span style={{ opacity: 0.8 }}>
+                                Basis gates:
+                              </span>{" "}
+                              <span>
+                                {Array.isArray(config.basis_gates)
+                                  ? config.basis_gates.join(", ")
+                                  : "—"}
+                              </span>
                             </div>
                             <div>
-                              <div
-                                style={{ fontSize: 11, opacity: 0.7 }}
-                              >
-                                Current Queue
-                              </div>
-                              <div
-                                style={{ fontSize: 18, fontWeight: 600 }}
-                              >
-                                {selected.queue} jobs
-                              </div>
+                              <span style={{ opacity: 0.8 }}>
+                                Dynamic circuits:
+                              </span>{" "}
+                              <strong>
+                                {String(
+                                  config.dynamic_circuits_enabled ?? "—"
+                                )}
+                              </strong>
+                            </div>
+                            <div>
+                              <span style={{ opacity: 0.8 }}>
+                                Max shots:
+                              </span>{" "}
+                              <strong>
+                                {config.max_shots ?? "—"}
+                              </strong>
+                            </div>
+                            <div>
+                              <span style={{ opacity: 0.8 }}>
+                                Coupling map size:
+                              </span>{" "}
+                              <strong>
+                                {Array.isArray(config.coupling_map)
+                                  ? config.coupling_map.length
+                                  : "—"}{" "}
+                                edges
+                              </strong>
                             </div>
                           </div>
                         </div>
-                      )}
+                      </div>
 
-                      <div style={{ marginTop: 8, fontSize: 11 }}>
-                        <strong>Circuit suggestion:</strong>{" "}
-                        {selected.qubits >= 20
-                          ? "Good candidate for deep QFT, VQE, or larger QAOA experiments."
-                          : selected.qubits >= 5
-                          ? "Ideal for mid-sized algorithms: small QAOA, 3–5 qubit GHZ, or variational demos."
-                          : "Perfect for Bell pairs, basic gates exploration and beginner circuits."}
+                      <div
+                        style={{
+                          marginTop: 10,
+                          paddingTop: 8,
+                          borderTop:
+                            "1px solid rgba(148,163,255,0.4)",
+                          display: "grid",
+                          gridTemplateColumns:
+                            "repeat(3,minmax(0,1fr))",
+                          gap: 8,
+                        }}
+                      >
+                        <div>
+                          <div
+                            style={{ fontSize: 11, opacity: 0.75 }}
+                          >
+                            STATUS
+                          </div>
+                          <div style={{ fontSize: 12 }}>
+                            State:{" "}
+                            <strong>
+                              {status.operational
+                                ? "Operational"
+                                : "Online"}
+                            </strong>
+                            <br />
+                            Message:{" "}
+                            <span>
+                              {status.status_msg || "OK"}
+                            </span>
+                          </div>
+                        </div>
+                        <div>
+                          <div
+                            style={{ fontSize: 11, opacity: 0.75 }}
+                          >
+                            CALIBRATION TIMES
+                          </div>
+                          <div style={{ fontSize: 12 }}>
+                            Last T1 update:{" "}
+                            <span>
+                              {calibration.last_t1_update ||
+                                "N/A"}
+                            </span>
+                            <br />
+                            Last T2 update:{" "}
+                            <span>
+                              {calibration.last_t2_update ||
+                                "N/A"}
+                            </span>
+                          </div>
+                        </div>
+                        <div>
+                          <div
+                            style={{ fontSize: 11, opacity: 0.75 }}
+                          >
+                            EXTRA
+                          </div>
+                          <div style={{ fontSize: 12 }}>
+                            Max experiment circuits:{" "}
+                            <span>
+                              {config.max_experiments ??
+                                "N/A"}
+                            </span>
+                            <br />
+                            IBM instance:{" "}
+                            <span>
+                              {basic.instance ||
+                                "Configured in env"}
+                            </span>
+                          </div>
+                        </div>
                       </div>
                     </>
-                  ) : detailTab === "details" ? (
-                    <div style={{ marginTop: 8, fontSize: 11 }}>
-                      {detailsLoading && <p>Loading backend details…</p>}
-                      {detailsError && (
-                        <p>Failed to load details for {selectedName}.</p>
-                      )}
-                      {!detailsLoading && !detailsError && (
-                        <>
-                          <div
-                            style={{
-                              display: "grid",
-                              gridTemplateColumns: "1.4fr 1.6fr",
-                              gap: 10,
-                            }}
-                          >
-                            <div>
-                              <div
-                                style={{ fontSize: 12, opacity: 0.8 }}
-                              >
-                                BASIC INFO
-                              </div>
-                              <div
-                                style={{ fontSize: 20, fontWeight: 600 }}
-                              >
-                                {basic.name || selectedName}
-                              </div>
-                              <div
-                                style={{ fontSize: 11, opacity: 0.8 }}
-                              >
-                                {basic.description || "IBM Quantum backend"}
-                              </div>
-                              <div
-                                style={{ marginTop: 6, fontSize: 11 }}
-                              >
-                                Version:{" "}
-                                <strong>
-                                  {basic.backend_version ||
-                                    selected.version ||
-                                    "-"}
-                                </strong>
-                                <br />
-                                Qubits:{" "}
-                                <strong>
-                                  {basic.num_qubits || selected.qubits}
-                                </strong>
-                                <br />
-                                Simulator:{" "}
-                                <strong>
-                                  {basic.simulator ? "Yes" : "No"}
-                                </strong>
-                                <br />
-                                Pending jobs:{" "}
-                                <strong>
-                                  {status.pending_jobs ?? selected.queue}
-                                </strong>
-                              </div>
-                            </div>
-                            <div>
-                              <div
-                                style={{ fontSize: 12, opacity: 0.8 }}
-                              >
-                                CONFIGURATION SNAPSHOT
-                              </div>
-                              <div style={{ marginTop: 6 }}>
-                                <div>
-                                  <span style={{ opacity: 0.8 }}>
-                                    Basis gates:
-                                  </span>{" "}
-                                  <span>
-                                    {Array.isArray(config.basis_gates)
-                                      ? config.basis_gates.join(", ")
-                                      : "—"}
-                                  </span>
-                                </div>
-                                <div>
-                                  <span style={{ opacity: 0.8 }}>
-                                    Dynamic circuits:
-                                  </span>{" "}
-                                  <strong>
-                                    {String(
-                                      config.dynamic_circuits_enabled ?? "—"
-                                    )}
-                                  </strong>
-                                </div>
-                                <div>
-                                  <span style={{ opacity: 0.8 }}>
-                                    Max shots:
-                                  </span>{" "}
-                                  <strong>
-                                    {config.max_shots ?? "—"}
-                                  </strong>
-                                </div>
-                                <div>
-                                  <span style={{ opacity: 0.8 }}>
-                                    Coupling map size:
-                                  </span>{" "}
-                                  <strong>
-                                    {Array.isArray(config.coupling_map)
-                                      ? config.coupling_map.length
-                                      : "—"}{" "}
-                                    edges
-                                  </strong>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div
-                            style={{
-                              marginTop: 10,
-                              paddingTop: 8,
-                              borderTop:
-                                "1px solid rgba(148,163,255,0.4)",
-                              display: "grid",
-                              gridTemplateColumns:
-                                "repeat(3,minmax(0,1fr))",
-                              gap: 8,
-                            }}
-                          >
-                            <div>
-                              <div
-                                style={{ fontSize: 11, opacity: 0.75 }}
-                              >
-                                STATUS
-                              </div>
-                              <div style={{ fontSize: 12 }}>
-                                State:{" "}
-                                <strong>
-                                  {status.operational
-                                    ? "Operational"
-                                    : "Online"}
-                                </strong>
-                                <br />
-                                Message:{" "}
-                                <span>
-                                  {status.status_msg || "OK"}
-                                </span>
-                              </div>
-                            </div>
-                            <div>
-                              <div
-                                style={{ fontSize: 11, opacity: 0.75 }}
-                              >
-                                CALIBRATION TIMES
-                              </div>
-                              <div style={{ fontSize: 12 }}>
-                                Last T1 update:{" "}
-                                <span>
-                                  {calibration.last_t1_update ||
-                                    "N/A"}
-                                </span>
-                                <br />
-                                Last T2 update:{" "}
-                                <span>
-                                  {calibration.last_t2_update ||
-                                    "N/A"}
-                                </span>
-                              </div>
-                            </div>
-                            <div>
-                              <div
-                                style={{ fontSize: 11, opacity: 0.75 }}
-                              >
-                                EXTRA
-                              </div>
-                              <div style={{ fontSize: 12 }}>
-                                Max experiment circuits:{" "}
-                                <span>
-                                  {config.max_experiments ??
-                                    "N/A"}
-                                </span>
-                                <br />
-                                IBM instance:{" "}
-                                <span>
-                                  {basic.instance ||
-                                    "Configured in env"}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  ) : (
-                    <div style={{ marginTop: 8, fontSize: 11 }}>
-                      {analyticsLoading && <p>Loading analytics…</p>}
-                      {analyticsError && (
-                        <p>Failed to load analytics for {selectedName}.</p>
-                      )}
-                      {!analyticsLoading && !analyticsError && (
-                        <>
-                          <div
-                            style={{
-                              display: "grid",
-                              gridTemplateColumns:
-                                "repeat(3,minmax(0,1fr))",
-                              gap: 10,
-                              marginBottom: 10,
-                            }}
-                          >
-                            <div>
-                              <div
-                                style={{ fontSize: 11, opacity: 0.7 }}
-                              >
-                                Avg T1 (µs)
-                              </div>
-                              <div
-                                style={{
-                                  fontSize: 16,
-                                  fontWeight: 600,
-                                }}
-                              >
-                                {(summary.avg_t1_us || 0).toFixed(2)}
-                              </div>
-                            </div>
-                            <div>
-                              <div
-                                style={{ fontSize: 11, opacity: 0.7 }}
-                              >
-                                Avg T2 (µs)
-                              </div>
-                              <div
-                                style={{
-                                  fontSize: 16,
-                                  fontWeight: 600,
-                                }}
-                              >
-                                {(summary.avg_t2_us || 0).toFixed(2)}
-                              </div>
-                            </div>
-                            <div>
-                              <div
-                                style={{ fontSize: 11, opacity: 0.7 }}
-                              >
-                                Avg readout error
-                              </div>
-                              <div
-                                style={{
-                                  fontSize: 16,
-                                  fontWeight: 600,
-                                }}
-                              >
-                                {summary.avg_readout_error
-                                  ? summary.avg_readout_error.toExponential(
-                                      2
-                                    )
-                                  : "—"}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div
-                            style={{
-                              width: "100%",
-                              height: 120,
-                              marginBottom: 10,
-                            }}
-                          >
-                            <ResponsiveContainer
-                              width="100%"
-                              height="100%"
-                            >
-                              <LineChart data={t1Data}>
-                                <CartesianGrid
-                                  stroke="#334155"
-                                  strokeDasharray="3 3"
-                                />
-                                <XAxis dataKey="qubit" hide />
-                                <YAxis stroke="currentColor" />
-                                <Tooltip />
-                                <Line
-                                  type="monotone"
-                                  dataKey="value"
-                                  stroke="#22c55e"
-                                  strokeWidth={2}
-                                  dot={false}
-                                />
-                              </LineChart>
-                            </ResponsiveContainer>
-                          </div>
-                          <div
-                            style={{
-                              fontSize: 10,
-                              marginBottom: 4,
-                            }}
-                          >
-                            T1 distribution (first {t1Data.length} qubits)
-                          </div>
-
-                          <div
-                            style={{
-                              width: "100%",
-                              height: 120,
-                              marginBottom: 10,
-                            }}
-                          >
-                            <ResponsiveContainer
-                              width="100%"
-                              height="100%"
-                            >
-                              <LineChart data={t2Data}>
-                                <CartesianGrid
-                                  stroke="#334155"
-                                  strokeDasharray="3 3"
-                                />
-                                <XAxis dataKey="qubit" hide />
-                                <YAxis stroke="currentColor" />
-                                <Tooltip />
-                                <Line
-                                  type="monotone"
-                                  dataKey="value"
-                                  stroke="#38bdf8"
-                                  strokeWidth={2}
-                                  dot={false}
-                                />
-                              </LineChart>
-                            </ResponsiveContainer>
-                          </div>
-                          <div
-                            style={{
-                              fontSize: 10,
-                              marginBottom: 4,
-                            }}
-                          >
-                            T2 distribution (first {t2Data.length} qubits)
-                          </div>
-
-                          <div
-                            style={{
-                              width: "100%",
-                              height: 120,
-                            }}
-                          >
-                            <ResponsiveContainer
-                              width="100%"
-                              height="100%"
-                            >
-                              <BarChart data={readoutData}>
-                                <CartesianGrid
-                                  stroke="#334155"
-                                  strokeDasharray="3 3"
-                                />
-                                <XAxis dataKey="qubit" hide />
-                                <YAxis stroke="currentColor" />
-                                <Tooltip />
-                                <Bar
-                                  dataKey="value"
-                                  fill="#f97316"
-                                  radius={[4, 4, 0, 0]}
-                                />
-                              </BarChart>
-                            </ResponsiveContainer>
-                          </div>
-                          <div
-                            style={{
-                              fontSize: 10,
-                              marginTop: 4,
-                            }}
-                          >
-                            Readout error per qubit (first{" "}
-                            {readoutData.length} qubits)
-                          </div>
-                        </>
-                      )}
-                    </div>
                   )}
-                </motion.div>
+                </div>
+              ) : (
+                <div style={{ marginTop: 8, fontSize: 11 }}>
+                  {analyticsLoading && <p>Loading analytics…</p>}
+                  {analyticsError && (
+                    <p>Failed to load analytics for {selectedName}.</p>
+                  )}
+                  {!analyticsLoading && !analyticsError && (
+                    <>
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns:
+                            "repeat(3,minmax(0,1fr))",
+                          gap: 10,
+                          marginBottom: 10,
+                        }}
+                      >
+                        <div>
+                          <div
+                            style={{ fontSize: 11, opacity: 0.7 }}
+                          >
+                            Avg T1 (µs)
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 16,
+                              fontWeight: 600,
+                            }}
+                          >
+                            {(summary.avg_t1_us || 0).toFixed(2)}
+                          </div>
+                        </div>
+                        <div>
+                          <div
+                            style={{ fontSize: 11, opacity: 0.7 }}
+                          >
+                            Avg T2 (µs)
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 16,
+                              fontWeight: 600,
+                            }}
+                          >
+                            {(summary.avg_t2_us || 0).toFixed(2)}
+                          </div>
+                        </div>
+                        <div>
+                          <div
+                            style={{ fontSize: 11, opacity: 0.7 }}
+                          >
+                            Avg readout error
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 16,
+                              fontWeight: 600,
+                            }}
+                          >
+                            {summary.avg_readout_error
+                              ? summary.avg_readout_error.toExponential(
+                                2
+                              )
+                              : "—"}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div
+                        style={{
+                          width: "100%",
+                          height: 120,
+                          marginBottom: 10,
+                        }}
+                      >
+                        <ResponsiveContainer
+                          width="100%"
+                          height="100%"
+                        >
+                          <LineChart data={t1Data}>
+                            <CartesianGrid
+                              stroke="#334155"
+                              strokeDasharray="3 3"
+                            />
+                            <XAxis dataKey="qubit" hide />
+                            <YAxis stroke="currentColor" />
+                            <Tooltip />
+                            <Line
+                              type="monotone"
+                              dataKey="value"
+                              stroke="#22c55e"
+                              strokeWidth={2}
+                              dot={false}
+                            />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 10,
+                          marginBottom: 4,
+                        }}
+                      >
+                        T1 distribution (first {t1Data.length} qubits)
+                      </div>
+
+                      <div
+                        style={{
+                          width: "100%",
+                          height: 120,
+                          marginBottom: 10,
+                        }}
+                      >
+                        <ResponsiveContainer
+                          width="100%"
+                          height="100%"
+                        >
+                          <LineChart data={t2Data}>
+                            <CartesianGrid
+                              stroke="#334155"
+                              strokeDasharray="3 3"
+                            />
+                            <XAxis dataKey="qubit" hide />
+                            <YAxis stroke="currentColor" />
+                            <Tooltip />
+                            <Line
+                              type="monotone"
+                              dataKey="value"
+                              stroke="#38bdf8"
+                              strokeWidth={2}
+                              dot={false}
+                            />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 10,
+                          marginBottom: 4,
+                        }}
+                      >
+                        T2 distribution (first {t2Data.length} qubits)
+                      </div>
+
+                      <div
+                        style={{
+                          width: "100%",
+                          height: 120,
+                        }}
+                      >
+                        <ResponsiveContainer
+                          width="100%"
+                          height="100%"
+                        >
+                          <BarChart data={readoutData}>
+                            <CartesianGrid
+                              stroke="#334155"
+                              strokeDasharray="3 3"
+                            />
+                            <XAxis dataKey="qubit" hide />
+                            <YAxis stroke="currentColor" />
+                            <Tooltip />
+                            <Bar
+                              dataKey="value"
+                              fill="#f97316"
+                              radius={[4, 4, 0, 0]}
+                            />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 10,
+                          marginTop: 4,
+                        }}
+                      >
+                        Readout error per qubit (first{" "}
+                        {readoutData.length} qubits)
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </motion.div>
+          </div>
+
+          {/* BOTTOM ROW: status + compare/dev */}
+          <div className="qd-row-bottom">
+            {/* System Status */}
+            <motion.div
+              className="qd-card"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <div className="qd-card-header-bar">
+                <div className="qd-card-header">
+                  <div>
+                    <div className="qd-card-title">
+                      System Status & Analytics
+                    </div>
+                    <div className="qd-card-sub">
+                      Overall cluster health, throughput and workload.
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              {/* BOTTOM ROW: status + compare/dev */}
-              <div className="qd-row-bottom">
-                {/* System Status */}
-                <motion.div
-                  className="qd-card"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
+              <div className="qd-status-list" style={{ marginTop: '0px' }}>
+                <div className="qd-status-item">
+                  <span>Operational backends</span>
+                  <span>
+                    {
+                      backends.filter(
+                        (b) => b.status === "operational"
+                      ).length
+                    }{" "}
+                    / {backends.length}
+                  </span>
+                </div>
+                <div className="qd-status-item">
+                  <span>Busiest backend</span>
+                  <span>{analytics.busiestName}</span>
+                </div>
+                <div className="qd-status-item">
+                  <span>Approx. total queued jobs</span>
+                  <span>{analytics.totalQueue}</span>
+                </div>
+              </div>
+
+              <div style={{ marginTop: 10, fontSize: 11 }}>
+                <strong>Traffic lights:</strong> green → safe, orange → busy, red
+                → avoid for latency-sensitive jobs.
+              </div>
+            </motion.div>
+
+            {/* Comparison + Dev */}
+            <motion.div
+              className="qd-card"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.04 }}
+            >
+              <div className="qd-card-header-bar">
+                <div className="qd-card-header">
+                  <div>
+                    <div className="qd-card-title">
+                      Backend Comparison & Dev View
+                    </div>
+                    <div className="qd-card-sub">
+                      Select up to 3 backends to inspect side-by-side.
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                className="qd-chip-btn"
+                onClick={() => setShowDev((x) => !x)}
+                style={{ marginTop: "10px" }}
+              >
+                <span
+                  className="dot"
+                  style={{
+                    background: "#38bdf8",
+                    boxShadow: "0 0 10px #38bdf8",
+                  }}
+                />
+                {showDev ? "Hide Dev Panel" : "Show Dev Panel"}
+              </button>
+
+              {compareBackends.length === 0 ? (
+                <p style={{ fontSize: 12, marginTop: 10 }}>
+                  Use the checkboxes in the cards above to pick backends for
+                  comparison.
+                </p>
+              ) : (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr 1fr",
+                    gap: 10,
+                    marginTop: 8,
+                    fontSize: 11,
+                  }}
                 >
-                  <div className="qd-card-header-bar">
-                    <div className="qd-card-header">
-                      <div>
-                        <div className="qd-card-title">
-                          System Status & Analytics
-                        </div>
-                        <div className="qd-card-sub">
-                          Overall cluster health, throughput and workload.
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="qd-status-list" style={{ marginTop: '0px' }}>
-                    <div className="qd-status-item">
-                      <span>Operational backends</span>
-                      <span>
-                        {
-                          backends.filter(
-                            (b) => b.status === "operational"
-                          ).length
-                        }{" "}
-                        / {backends.length}
-                      </span>
-                    </div>
-                    <div className="qd-status-item">
-                      <span>Busiest backend</span>
-                      <span>{analytics.busiestName}</span>
-                    </div>
-                    <div className="qd-status-item">
-                      <span>Approx. total queued jobs</span>
-                      <span>{analytics.totalQueue}</span>
-                    </div>
-                  </div>
-
-                  <div style={{ marginTop: 10, fontSize: 11 }}>
-                    <strong>Traffic lights:</strong> green → safe, orange → busy, red
-                    → avoid for latency-sensitive jobs.
-                  </div>
-                </motion.div>
-
-                {/* Comparison + Dev */}
-                <motion.div
-                  className="qd-card"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.04 }}
-                >
-                  <div className="qd-card-header-bar">
-                    <div className="qd-card-header">
-                      <div>
-                        <div className="qd-card-title">
-                          Backend Comparison & Dev View
-                        </div>
-                        <div className="qd-card-sub">
-                          Select up to 3 backends to inspect side-by-side.
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <button
-                    className="qd-chip-btn"
-                    onClick={() => setShowDev((x) => !x)}
-                    style={{ marginTop: "10px" }}
-                  >
-                    <span
-                      className="dot"
-                      style={{
-                        background: "#38bdf8",
-                        boxShadow: "0 0 10px #38bdf8",
-                      }}
-                    />
-                    {showDev ? "Hide Dev Panel" : "Show Dev Panel"}
-                  </button>
-
-                  {compareBackends.length === 0 ? (
-                    <p style={{ fontSize: 12, marginTop: 10 }}>
-                      Use the checkboxes in the cards above to pick backends for
-                      comparison.
-                    </p>
-                  ) : (
+                  {compareBackends.map((b) => (
                     <div
+                      key={b.id}
                       style={{
-                        display: "grid",
-                        gridTemplateColumns: "1fr 1fr 1fr",
-                        gap: 10,
-                        marginTop: 8,
-                        fontSize: 11,
+                        borderRadius: 12,
+                        border:
+                          "1px solid rgba(148,163,255,0.7)",
+                        padding: 8,
+                        background:
+                          "radial-gradient(circle at top, rgba(37,99,235,0.4), transparent)",
                       }}
                     >
-                      {compareBackends.map((b) => (
-                        <div
-                          key={b.id}
-                          style={{
-                            borderRadius: 12,
-                            border:
-                              "1px solid rgba(148,163,255,0.7)",
-                            padding: 8,
-                            background:
-                              "radial-gradient(circle at top, rgba(37,99,235,0.4), transparent)",
-                          }}
-                        >
-                          <div
-                            style={{
-                              fontWeight: 600,
-                              marginBottom: 4,
-                            }}
-                          >
-                            {b.name}
-                          </div>
-                          <div>Type: {b.type}</div>
-                          <div>Region: {b.region}</div>
-                          <div>Qubits: {b.qubits}</div>
-                          <div>Queue: {b.queue}</div>
-                          <div>Status: {b.status}</div>
-                          <div>
-                            AI Score: {computeScore(b).toFixed(1)}
-                          </div>
-                        </div>
-                      ))}
+                      <div
+                        style={{
+                          fontWeight: 600,
+                          marginBottom: 4,
+                        }}
+                      >
+                        {b.name}
+                      </div>
+                      <div>Type: {b.type}</div>
+                      <div>Region: {b.region}</div>
+                      <div>Qubits: {b.qubits}</div>
+                      <div>Queue: {b.queue}</div>
+                      <div>Status: {b.status}</div>
+                      <div>
+                        AI Score: {computeScore(b).toFixed(1)}
+                      </div>
                     </div>
-                  )}
+                  ))}
+                </div>
+              )}
 
-                  {showDev && (
-                    <div className="qd-dev-panel">
-                      <pre>{JSON.stringify(backends, null, 2)}</pre>
-                    </div>
-                  )}
-                </motion.div>
-              </div>
-            </div>
-            
-            {/* The copyright component must be outside the main flex/grid container to span the full width at the bottom */}
-            
+              {showDev && (
+                <div className="qd-dev-panel">
+                  <pre>{JSON.stringify(backends, null, 2)}</pre>
+                </div>
+              )}
+            </motion.div>
+          </div>
         </div>
-        <div className="copyright">
-                © {new Date().getFullYear()} Quantum Job Tracker. Built for the Quantum Community.
-            </div>
-      </>
+
+        {/* The copyright component must be outside the main flex/grid container to span the full width at the bottom */}
+
+      </div>
+      <div className="copyright">
+        © {new Date().getFullYear()} Quantum Job Tracker. Built for the Quantum Community.
+      </div>
+    </>
   );
 }

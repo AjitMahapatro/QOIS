@@ -14,7 +14,7 @@ from qiskit_ibm_runtime import SamplerV2 as Sampler
 from qiskit_ibm_runtime.exceptions import RuntimeJobFailureError
 
 # =========================================================
-# MEMORY-OPTIMIZED QUANTUM RUNTIME BRIDGE
+# MEMORY-OPTIMIZED QUANTUM RUNTIME BRIDGE (2026 STABLE)
 # =========================================================
 
 MAX_HARDWARE_SHOTS = 1000
@@ -58,10 +58,8 @@ def json_safe(value: Any) -> Any:
 
 def read_input() -> Dict[str, Any]:
     raw = sys.stdin.read()
-
     if not raw.strip():
         return {}
-
     return json.loads(raw)
 
 
@@ -71,7 +69,6 @@ def read_input() -> Dict[str, Any]:
 
 def normalize_qasm(qasm: str) -> str:
     qasm = (qasm or "").strip()
-
     if not qasm:
         return qasm
 
@@ -84,7 +81,6 @@ def normalize_qasm(qasm: str) -> str:
             'OPENQASM 3.0;\ninclude "stdgates.inc";',
             1,
         )
-
     return qasm
 
 
@@ -93,54 +89,40 @@ def ensure_measurements(circuit: QuantumCircuit) -> QuantumCircuit:
         instruction.operation.name == "measure"
         for instruction in circuit.data
     )
-
     if has_measure:
         return circuit
 
     measured = circuit.copy()
     measured.measure_all()
-
     return measured
 
 
 def translate_openqasm3_to_qasm2(qasm: str) -> str:
     translated = qasm
-
-    translated = translated.replace(
-        "OPENQASM 3.0;",
-        "OPENQASM 2.0;"
-    )
-
-    translated = translated.replace(
-        'include "stdgates.inc";',
-        'include "qelib1.inc";'
-    )
+    translated = translated.replace("OPENQASM 3.0;", "OPENQASM 2.0;")
+    translated = translated.replace('include "stdgates.inc";', 'include "qelib1.inc";')
 
     translated = re.sub(
         r"\bqubit\s*\[\s*(\d+)\s*\]\s+([A-Za-z_]\w*)\s*;",
         r"qreg \2[\1];",
         translated,
     )
-
     translated = re.sub(
         r"\bbit\s*\[\s*(\d+)\s*\]\s+([A-Za-z_]\w*)\s*;",
         r"creg \2[\1];",
         translated,
     )
-
     return translated
 
 
 def load_circuit(qasm: str) -> QuantumCircuit:
     qasm = normalize_qasm(qasm)
-
     if qasm.upper().startswith("OPENQASM 3"):
         try:
             return qasm3.loads(qasm)
         except Exception:
             translated = translate_openqasm3_to_qasm2(qasm)
             return QuantumCircuit.from_qasm_str(translated)
-
     return QuantumCircuit.from_qasm_str(qasm)
 
 
@@ -150,20 +132,15 @@ def load_circuit(qasm: str) -> QuantumCircuit:
 
 def get_service() -> QiskitRuntimeService:
     token = os.getenv("IBM_API_KEY")
-
     if not token:
         raise ValueError("IBM_API_KEY not configured.")
 
     kwargs = {
-        "channel": os.getenv(
-            "IBM_RUNTIME_CHANNEL",
-            "ibm_quantum_platform"
-        ),
+        "channel": os.getenv("IBM_RUNTIME_CHANNEL", "ibm_quantum_platform"),
         "token": token,
     }
 
     instance = os.getenv("IBM_INSTANCE_CRN")
-
     if instance:
         kwargs["instance"] = instance
 
@@ -175,7 +152,6 @@ def get_service() -> QiskitRuntimeService:
 # =========================================================
 
 def backend_summary(backend: Any) -> Dict[str, Any]:
-
     try:
         status = backend.status()
     except Exception:
@@ -201,21 +177,14 @@ def backend_summary(backend: Any) -> Dict[str, Any]:
 # =========================================================
 
 def list_backends(payload: Dict[str, Any]) -> Dict[str, Any]:
-
     global BACKEND_CACHE
     global BACKEND_CACHE_TIME
 
     current_time = time.time()
-
-    # Use cache if valid
-    if (
-        BACKEND_CACHE is not None
-        and current_time - BACKEND_CACHE_TIME < BACKEND_CACHE_TTL
-    ):
+    if BACKEND_CACHE is not None and current_time - BACKEND_CACHE_TIME < BACKEND_CACHE_TTL:
         return BACKEND_CACHE
 
     qubits = int(payload.get("minQubits") or 1)
-
     service = get_service()
 
     backends = service.backends(
@@ -227,29 +196,17 @@ def list_backends(payload: Dict[str, Any]) -> Dict[str, Any]:
     ordered = sorted(
         backends,
         key=lambda backend: (
-            getattr(
-                getattr(
-                    backend,
-                    "status",
-                    lambda: None
-                )(),
-                "pending_jobs",
-                10**9
-            ),
+            getattr(getattr(backend, "status", lambda: None)(), "pending_jobs", 10**9),
             backend.name,
         ),
     )
 
     result = {
-        "devices": [
-            backend_summary(backend)
-            for backend in ordered
-        ]
+        "devices": [backend_summary(backend) for backend in ordered]
     }
 
     BACKEND_CACHE = result
     BACKEND_CACHE_TIME = current_time
-
     return result
 
 
@@ -262,16 +219,10 @@ def choose_backend(
     qubits_required: int,
     requested_backend: Optional[str] = None,
 ):
-
     if requested_backend:
         backend = service.backend(requested_backend)
-
         if getattr(backend, "num_qubits", 0) < qubits_required:
-            raise ValueError(
-                f"Backend {backend.name} "
-                f"does not have enough qubits."
-            )
-
+            raise ValueError(f"Backend {backend.name} does not have enough qubits.")
         return backend
 
     backends = service.backends(
@@ -281,18 +232,9 @@ def choose_backend(
     )
 
     if not backends:
-        raise ValueError(
-            "No operational backend available."
-        )
+        raise ValueError("No operational backend available.")
 
-    backends.sort(
-        key=lambda backend: getattr(
-            backend.status(),
-            "pending_jobs",
-            10**9,
-        )
-    )
-
+    backends.sort(key=lambda b: getattr(b.status(), "pending_jobs", 10**9))
     return backends[0]
 
 
@@ -305,30 +247,14 @@ def run_simulator(
     shots: int,
     backend_name: str = "aer_simulator"
 ) -> Dict[str, Any]:
-
-    # MEMORY OPTIMIZATION:
-    # Only import Aer when actually needed
     from qiskit_aer import AerSimulator
 
     simulator = AerSimulator()
-
-    transpiled = transpile(
-        circuit,
-        simulator,
-        optimization_level=1,
-    )
-
-    result = simulator.run(
-        transpiled,
-        shots=min(shots, MAX_SIMULATOR_SHOTS),
-    ).result()
+    transpiled = transpile(circuit, simulator, optimization_level=1)
+    result = simulator.run(transpiled, shots=min(shots, MAX_SIMULATOR_SHOTS)).result()
 
     counts = result.get_counts()
-
-    counts = {
-        str(k): int(v)
-        for k, v in counts.items()
-    }
+    counts = {str(k): int(v) for k, v in counts.items()}
 
     return {
         "status": "completed",
@@ -348,11 +274,7 @@ def run_simulator(
 # =========================================================
 
 def validate(payload: Dict[str, Any]) -> Dict[str, Any]:
-
-    qasm = normalize_qasm(
-        payload.get("qasm", "")
-    )
-
+    qasm = normalize_qasm(payload.get("qasm", ""))
     if not qasm:
         raise ValueError("QASM empty.")
 
@@ -374,136 +296,97 @@ def validate(payload: Dict[str, Any]) -> Dict[str, Any]:
 # =========================================================
 
 def execute_job(payload: Dict[str, Any]) -> Dict[str, Any]:
-
     validation = validate(payload)
-
     qasm = validation["normalizedQasm"]
 
     circuit = load_circuit(qasm)
     circuit = ensure_measurements(circuit)
 
-    requested_shots = int(
-        payload.get("shots") or 1024
-    )
-
-    shots = max(
-        1,
-        min(requested_shots, MAX_HARDWARE_SHOTS)
-    )
+    requested_shots = int(payload.get("shots") or 1024)
+    shots = max(1, min(requested_shots, MAX_HARDWARE_SHOTS))
 
     requested_backend = payload.get("backend")
-    allow_fallback = bool(
-        payload.get("allowFallback", True)
-    )
+    allow_fallback = bool(payload.get("allowFallback", True))
 
     try:
-
         service = get_service()
+        backend = choose_backend(service, circuit.num_qubits, requested_backend)
 
-        backend = choose_backend(
-            service,
-            circuit.num_qubits,
-            requested_backend,
-        )
-
-        pm = generate_preset_pass_manager(
-            backend=backend,
-            optimization_level=1,
-        )
-
+        pm = generate_preset_pass_manager(backend=backend, optimization_level=1)
         transpiled = pm.run(circuit)
 
         sampler = Sampler(mode=backend)
-
-        job = sampler.run(
-            [transpiled],
-            shots=shots,
-        )
+        job = sampler.run([transpiled], shots=shots)
 
         return {
             "status": "queued",
             "mode": "hardware",
             "jobId": job.job_id(),
             "backend": backend.name,
-            "backendSummary": backend_summary(
-                backend
-            ),
+            "backendSummary": backend_summary(backend),
             "shots": shots,
             "qubits": transpiled.num_qubits,
             "transpiledDepth": transpiled.depth(),
         }
 
     except Exception as exc:
-
         if not allow_fallback:
             raise
-
-        simulator_result = run_simulator(
-            circuit,
-            requested_shots,
-        )
-
+        simulator_result = run_simulator(circuit, requested_shots)
         simulator_result["failureReason"] = str(exc)
-
         return simulator_result
 
 
 # =========================================================
-# REFRESH JOB
+# REFRESH JOB (ADAPTIVE EXTRACTOR PATTERN)
 # =========================================================
 
 def refresh_job(payload: Dict[str, Any]) -> Dict[str, Any]:
-
     job_id = payload.get("jobId")
-
     if not job_id:
         raise ValueError("jobId required.")
 
     service = get_service()
-
     job = service.job(job_id)
-
     status = str(job.status())
 
     response = {
         "jobId": job_id,
         "status": status,
-        "backend": (
-            getattr(job.backend(), "name", None)
-            if job.backend()
-            else None
-        ),
+        "backend": getattr(job.backend(), "name", None) if job.backend() else None,
     }
 
     if status == "DONE":
-
         result = job.result()
-
         pub_result = result[0]
-
         counts = {}
 
         try:
-            data = getattr(pub_result, "data", None)
+            # 🚀 ADAPTIVE EXTRACTION FIX:
+            # Safely navigate both modern SamplerV2 DataBin formats and legacy layouts
+            if hasattr(pub_result, "data") and pub_result.data:
+                data_bin = pub_result.data
+                
+                # Check for standard classical register collections (e.g., 'meas' or 'c')
+                register_keys = [k for k in data_bin.__dict__.keys() if not k.startswith('_')]
+                target_key = register_keys[0] if register_keys else None
 
-            if data:
-
-                raw = json_safe(data)
-
-                if isinstance(raw, dict):
-
-                    for value in raw.values():
-
-                        if isinstance(value, dict):
-
-                            counts = {
-                                str(k): int(v * 1000)
-                                for k, v in value.items()
-                            }
-
-                            break
-
-        except Exception:
+                if target_key:
+                    reg_data = getattr(data_bin, target_key)
+                    # Modern Primitive V2 paths store raw occurrences inside .get_counts()
+                    if hasattr(reg_data, "get_counts"):
+                        raw_counts = reg_data.get_counts()
+                        counts = {str(k): int(v) for k, v in raw_counts.items()}
+            
+            # Fallback block to guard against edge variations
+            if not counts and hasattr(pub_result, "data") and hasattr(pub_result.data, "values"):
+                for value in json_safe(pub_result.data).values():
+                    if isinstance(value, dict):
+                        counts = {str(k): int(v if v > 1 else v * 1000) for k, v in value.items()}
+                        break
+        except Exception as extractor_err:
+            # Log parsing errors safely inside stderr logs instead of hard-crashing
+            sys.stderr.write(f"[PARSING ERROR]: {str(extractor_err)}\n")
             counts = {}
 
         response["result"] = {
@@ -511,72 +394,42 @@ def refresh_job(payload: Dict[str, Any]) -> Dict[str, Any]:
             "source": "ibm_runtime",
             "counts": counts,
         }
-
         return response
 
     if status == "ERROR":
-
         try:
             error_message = job.error_message()
         except Exception:
             error_message = "Unknown IBM Runtime error."
-
         response["errorMessage"] = error_message
-
         return response
 
     return response
 
 
 # =========================================================
-# MAIN
+# MAIN ENTRYPOINT
 # =========================================================
 
 def main():
-
     if len(sys.argv) < 2:
-        emit({
-            "ok": False,
-            "error": "Action required."
-        }, code=1)
+        emit({"ok": False, "error": "Action required."}, code=1)
 
     action = sys.argv[1]
-
     payload = read_input()
 
     try:
-
         if action == "validate":
-            emit({
-                "ok": True,
-                "data": validate(payload)
-            })
-
-        if action == "execute_job":
-            emit({
-                "ok": True,
-                "data": execute_job(payload)
-            })
-
-        if action == "refresh_job":
-            emit({
-                "ok": True,
-                "data": refresh_job(payload)
-            })
-
-        if action == "list_backends":
-            emit({
-                "ok": True,
-                "data": list_backends(payload)
-            })
-
-        emit({
-            "ok": False,
-            "error": f"Unsupported action: {action}"
-        }, code=1)
-
+            emit({"ok": True, "data": validate(payload)})
+        elif action == "execute_job":
+            emit({"ok": True, "data": execute_job(payload)})
+        elif action == "refresh_job":
+            emit({"ok": True, "data": refresh_job(payload)})
+        elif action == "list_backends":
+            emit({"ok": True, "data": list_backends(payload)})
+        else:
+            emit({"ok": False, "error": f"Unsupported action: {action}"}, code=1)
     except Exception as exc:
-
         emit({
             "ok": False,
             "error": str(exc),
