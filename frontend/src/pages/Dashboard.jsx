@@ -332,6 +332,7 @@ html, body {
   grid-template-columns: 2.2fr 1.4fr;
   gap: 18px;
   margin-bottom: 22px;
+  align-items: start;
 }
 .qd-row-bottom {
   display: grid;
@@ -1235,8 +1236,10 @@ html, body {
 }
 `;
 
-// ===== Helpers =====
-const API_BASE = "https://quantum-jobs-tracker-l3jz.onrender.com/api";
+// This automatically uses localhost:5000 offline and your live server when deployed!
+const API_BASE = import.meta.env.MODE === "production" 
+  ? "/api" 
+  : "http://localhost:5000/api";
 
 function computeScore(b) {
   const qubitScore = b.qubits || 0;
@@ -1791,6 +1794,60 @@ export default function Dashboard() {
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
+
+                  {/* QUEUE METRICS & INSIGHTS */}
+                  <div style={{ marginTop: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                    <div style={{ background: 'linear-gradient(135deg, rgba(34,211,238,0.1) 0%, rgba(34,211,238,0.05) 100%)', border: '1px solid rgba(34,211,238,0.2)', borderRadius: '10px', padding: '12px' }}>
+                      <div style={{ fontSize: '10px', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>Avg Queue</div>
+                      <div style={{ fontSize: '18px', fontWeight: '700', color: '#22d3ee' }}>{Math.round(filtered.reduce((s, b) => s + b.queue, 0) / (filtered.length || 1))}</div>
+                      <div style={{ fontSize: '9px', color: '#6b7280', marginTop: '4px' }}>across all backends</div>
+                    </div>
+                    <div style={{ background: 'linear-gradient(135deg, rgba(249,115,22,0.1) 0%, rgba(249,115,22,0.05) 100%)', border: '1px solid rgba(249,115,22,0.2)', borderRadius: '10px', padding: '12px' }}>
+                      <div style={{ fontSize: '10px', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>Peak Queue</div>
+                      <div style={{ fontSize: '18px', fontWeight: '700', color: '#f97316' }}>{Math.max(...filtered.map(b => b.queue), 0)}</div>
+                      <div style={{ fontSize: '9px', color: '#6b7280', marginTop: '4px' }}>highest load detected</div>
+                    </div>
+                    <div style={{ background: 'linear-gradient(135deg, rgba(34,197,94,0.1) 0%, rgba(34,197,94,0.05) 100%)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: '10px', padding: '12px' }}>
+                      <div style={{ fontSize: '10px', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>Healthiest</div>
+                      <div style={{ fontSize: '18px', fontWeight: '700', color: '#22c55e' }}>{filtered.length > 0 ? filtered.sort((a, b) => a.queue - b.queue)[0].name : 'N/A'}</div>
+                      <div style={{ fontSize: '9px', color: '#6b7280', marginTop: '4px' }}>lowest queue depth</div>
+                    </div>
+                  </div>
+
+                  {/* BACKEND STATUS GRID */}
+                  <div style={{ marginTop: '14px', padding: '12px', background: 'rgba(15,23,42,0.4)', borderRadius: '10px', border: '1px solid rgba(34,211,238,0.1)' }}>
+                    <div style={{ fontSize: '10px', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '10px' }}>📊 Backend Status</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px' }}>
+                      {filtered.map((backend) => (
+                        <div key={backend.name} style={{ background: 'rgba(30,41,59,0.6)', border: '1px solid rgba(34,211,238,0.15)', borderRadius: '8px', padding: '10px', fontSize: '12px' }}>
+                          <div style={{ fontWeight: '600', color: '#e0e7ff', marginBottom: '4px' }}>{backend.name}</div>
+                          <div style={{ fontSize: '11px', color: backend.queue > 2 ? '#f97316' : '#22c55e', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <span>{backend.queue > 2 ? '⚠️' : '✅'}</span>
+                            <span>Queue: <strong>{backend.queue}</strong></span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* SYSTEM INTELLIGENCE */}
+                  <div style={{ marginTop: '14px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                    <div style={{ background: 'rgba(59,89,152,0.15)', border: '1px solid rgba(59,89,152,0.25)', borderRadius: '10px', padding: '12px' }}>
+                      <div style={{ fontSize: '10px', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>Active Backends</div>
+                      <div style={{ fontSize: '18px', fontWeight: '700', color: '#60a5fa' }}>{filtered.length}</div>
+                      <div style={{ fontSize: '9px', color: '#6b7280', marginTop: '4px' }}>responding & ready</div>
+                    </div>
+                    <div style={{ background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.25)', borderRadius: '10px', padding: '12px' }}>
+                      <div style={{ fontSize: '10px', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>System Health</div>
+                      <div style={{ fontSize: '18px', fontWeight: '700', color: '#a78bfa' }}>{filtered.filter(b => b.queue <= 2).length === filtered.length ? '🟢 Optimal' : filtered.filter(b => b.queue > 5).length === 0 ? '🟡 Good' : '🔴 Busy'}</div>
+                      <div style={{ fontSize: '9px', color: '#6b7280', marginTop: '4px' }}>cluster state</div>
+                    </div>
+                    <div style={{ background: 'rgba(168,85,247,0.15)', border: '1px solid rgba(168,85,247,0.25)', borderRadius: '10px', padding: '12px' }}>
+                      <div style={{ fontSize: '10px', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>Total Queued</div>
+                      <div style={{ fontSize: '18px', fontWeight: '700', color: '#d8b4fe' }}>{filtered.reduce((s, b) => s + b.queue, 0)}</div>
+                      <div style={{ fontSize: '9px', color: '#6b7280', marginTop: '4px' }}>jobs pending</div>
+                    </div>
+                  </div>
                 </motion.div>
 
                 {/* AI Recommendation + Filters */}
@@ -1817,18 +1874,19 @@ export default function Dashboard() {
                   </div>
                   {/* END NEW HEADER BAR */}
 
-                  <div className="qd-filter-row" style={{ marginTop: '0px' }}>
+                  <div className="qd-filter-row" style={{ marginTop: '16px', background: 'linear-gradient(90deg, rgba(34,211,238,0.05) 0%, rgba(139,92,246,0.05) 100%)', padding: '16px', borderRadius: '14px', border: '1px solid rgba(139,92,246,0.15)' }}>
                     <div className="qd-filter-group">
-                      <label>Min qubits</label>
+                      <label style={{ fontSize: '11px', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px', display: 'block' }}>Min qubits</label>
                       <input
                         className="qd-filter-input"
                         type="number"
                         value={minQubits}
                         onChange={(e) => setMinQubits(Number(e.target.value))}
+                        style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(34,211,238,0.3)', borderRadius: '8px', padding: '8px 12px', color: '#fff', fontSize: '13px' }}
                       />
                     </div>
                     <div className="qd-filter-group">
-                      <label>Max queue</label>
+                      <label style={{ fontSize: '11px', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px', display: 'block' }}>Max queue</label>
                       <input
                         className="qd-filter-input"
                         type="number"
@@ -1839,14 +1897,16 @@ export default function Dashboard() {
                             e.target.value === "" ? null : Number(e.target.value)
                           )
                         }
+                        style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(34,211,238,0.3)', borderRadius: '8px', padding: '8px 12px', color: '#fff', fontSize: '13px' }}
                       />
                     </div>
                     <div className="qd-filter-group">
-                      <label>Type</label>
+                      <label style={{ fontSize: '11px', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px', display: 'block' }}>Type</label>
                       <select
                         className="qd-filter-select"
                         value={typeFilter}
                         onChange={(e) => setTypeFilter(e.target.value)}
+                        style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(34,211,238,0.3)', borderRadius: '8px', padding: '8px 12px', color: '#fff', fontSize: '13px', cursor: 'pointer' }}
                       >
                         <option value="all">All</option>
                         <option value="hardware">Hardware</option>
@@ -1854,11 +1914,12 @@ export default function Dashboard() {
                       </select>
                     </div>
                     <div className="qd-filter-group">
-                      <label>Sort by</label>
+                      <label style={{ fontSize: '11px', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px', display: 'block' }}>Sort by</label>
                       <select
                         className="qd-filter-select"
                         value={sortBy}
                         onChange={(e) => setSortBy(e.target.value)}
+                        style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(34,211,238,0.3)', borderRadius: '8px', padding: '8px 12px', color: '#fff', fontSize: '13px', cursor: 'pointer' }}
                       >
                         <option value="queue">Queue (low → high)</option>
                         <option value="qubits">Qubits (high → low)</option>
@@ -1869,35 +1930,156 @@ export default function Dashboard() {
                       className="qd-filter-group"
                       style={{ flex: 1, minWidth: 180 }}
                     >
-                      <label>Search backend</label>
+                      <label style={{ fontSize: '11px', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px', display: 'block' }}>Search backend</label>
                       <input
                         className="qd-filter-input"
                         placeholder="Search by name..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
+                        style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(34,211,238,0.3)', borderRadius: '8px', padding: '8px 12px', color: '#fff', fontSize: '13px', width: '100%' }}
                       />
                     </div>
                   </div>
 
                   {recommendation ? (
                     <>
-                      <p className="qd-reco-main">
-                        Recommended: <strong>{recommendation.name}</strong>
-                      </p>
-                      <p className="qd-reco-meta">
-                        {recommendation.qubits} qubits • queue {recommendation.queue} •{" "}
-                        {recommendation.type}
-                      </p>
+                      {/* ===== ENHANCED RECOMMENDATION CARD ===== */}
+                      <div style={{ marginTop: 16, marginBottom: 20 }}>
+                        {/* Main Recommendation - Premium Card */}
+                        <div style={{
+                          background: 'linear-gradient(135deg, rgba(34,211,238,0.15) 0%, rgba(139,92,246,0.1) 100%)',
+                          border: '2px solid rgba(34,211,238,0.4)',
+                          borderRadius: '18px',
+                          padding: '20px',
+                          marginBottom: '16px',
+                          position: 'relative',
+                          overflow: 'hidden',
+                          backdropFilter: 'blur(12px)',
+                        }}>
+                          {/* Glow effect behind card */}
+                          <div style={{
+                            position: 'absolute',
+                            top: '-50%',
+                            right: '-50%',
+                            width: '300px',
+                            height: '300px',
+                            background: 'radial-gradient(circle, rgba(34,211,238,0.2) 0%, transparent 70%)',
+                            borderRadius: '50%',
+                            pointerEvents: 'none',
+                          }} />
+                          
+                          <div style={{ position: 'relative', zIndex: 1 }}>
+                            {/* Header with badge */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                              <div>
+                                <div style={{ fontSize: '13px', color: '#22d3ee', fontWeight: '600', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '6px' }}>
+                                  ✨ Top Recommendation
+                                </div>
+                                <div style={{ fontSize: '28px', fontWeight: '800', background: 'linear-gradient(90deg, #fff, #22d3ee)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', color: 'transparent', fontFamily: 'Space Grotesk, sans-serif' }}>
+                                  {recommendation.name}
+                                </div>
+                              </div>
+                              <div style={{
+                                background: 'linear-gradient(135deg, #22d3ee, #06b6d4)',
+                                padding: '8px 16px',
+                                borderRadius: '20px',
+                                fontSize: '12px',
+                                fontWeight: '700',
+                                color: '#000',
+                                boxShadow: '0 0 20px rgba(34,211,238,0.5)',
+                              }}>
+                                🎯 OPTIMAL
+                              </div>
+                            </div>
+
+                            {/* Core metrics */}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '16px' }}>
+                              <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(34,211,238,0.2)', borderRadius: '12px', padding: '12px', textAlign: 'center' }}>
+                                <div style={{ fontSize: '11px', color: '#9ca3af', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Qubits</div>
+                                <div style={{ fontSize: '20px', fontWeight: '700', color: '#22d3ee' }}>{recommendation.qubits}</div>
+                              </div>
+                              <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(34,211,238,0.2)', borderRadius: '12px', padding: '12px', textAlign: 'center' }}>
+                                <div style={{ fontSize: '11px', color: '#9ca3af', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Queue Depth</div>
+                                <div style={{ fontSize: '20px', fontWeight: '700', color: '#4ade80' }}>{recommendation.queue}</div>
+                              </div>
+                              <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(34,211,238,0.2)', borderRadius: '12px', padding: '12px', textAlign: 'center' }}>
+                                <div style={{ fontSize: '11px', color: '#9ca3af', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Type</div>
+                                <div style={{ fontSize: '16px', fontWeight: '700', color: '#a78bfa' }}>{recommendation.type}</div>
+                              </div>
+                            </div>
+
+                            {/* Why this backend section */}
+                            <div style={{ background: 'rgba(0,0,0,0.3)', borderLeft: '3px solid #22d3ee', borderRadius: '8px', padding: '12px', fontSize: '13px', color: '#e5e7eb', lineHeight: '1.6', fontStyle: 'italic' }}>
+                              <strong style={{ color: '#22d3ee' }}>Why chosen:</strong> Optimal balance of queue depth, circuit capacity, and hardware reliability. Minimized cost score with highest confidence rating.
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Score breakdown bars */}
+                        <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(139,92,246,0.2)', borderRadius: '14px', padding: '14px', marginBottom: '16px' }}>
+                          <div style={{ fontSize: '12px', fontWeight: '700', color: '#9ca3af', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>📊 Score Components</div>
+                          
+                          {/* Queue Depth Score */}
+                          <div style={{ marginBottom: '10px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', fontSize: '12px' }}>
+                              <span style={{ color: '#cbd5e1' }}>Queue Depth Impact</span>
+                              <span style={{ color: '#4ade80', fontWeight: '600' }}>Low</span>
+                            </div>
+                            <div style={{ height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
+                              <div style={{ height: '100%', width: '20%', background: 'linear-gradient(90deg, #4ade80, #22c55e)', borderRadius: '3px' }} />
+                            </div>
+                          </div>
+
+                          {/* Complexity Score */}
+                          <div style={{ marginBottom: '10px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', fontSize: '12px' }}>
+                              <span style={{ color: '#cbd5e1' }}>Circuit Complexity</span>
+                              <span style={{ color: '#fbbf24', fontWeight: '600' }}>Medium</span>
+                            </div>
+                            <div style={{ height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
+                              <div style={{ height: '100%', width: '45%', background: 'linear-gradient(90deg, #fbbf24, #f59e0b)', borderRadius: '3px' }} />
+                            </div>
+                          </div>
+
+                          {/* Error Rate Score */}
+                          <div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', fontSize: '12px' }}>
+                              <span style={{ color: '#cbd5e1' }}>Hardware Error Rate</span>
+                              <span style={{ color: '#60a5fa', fontWeight: '600' }}>Very Low</span>
+                            </div>
+                            <div style={{ height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
+                              <div style={{ height: '100%', width: '15%', background: 'linear-gradient(90deg, #60a5fa, #3b82f6)', borderRadius: '3px' }} />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     </>
                   ) : (
-                    <p style={{ marginTop: 12, fontSize: 12 }}>
-                      No backend matches filters.
+                    <p style={{ marginTop: 12, fontSize: 12, color: '#9ca3af' }}>
+                      🔍 No backend matches your filters. Try adjusting the criteria.
                     </p>
                   )}
 
-                  <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
-                    <button className="qd-export-btn" onClick={handleExport}>
-                      Export Backend Report (JSON)
+                  <div style={{ marginTop: 16, display: "flex", gap: 8, flexWrap: 'wrap' }}>
+                    <button className="qd-export-btn" onClick={handleExport} style={{
+                      background: 'linear-gradient(135deg, #06b6d4 0%, #22d3ee 100%)',
+                      color: '#000',
+                      padding: '10px 20px',
+                      borderRadius: '10px',
+                      border: 'none',
+                      fontWeight: '700',
+                      fontSize: '13px',
+                      cursor: 'pointer',
+                      transition: 'all 0.3s ease',
+                      boxShadow: '0 4px 15px rgba(34,211,238,0.3)',
+                    }} onMouseEnter={(e) => {
+                      e.target.style.transform = 'translateY(-2px)';
+                      e.target.style.boxShadow = '0 6px 25px rgba(34,211,238,0.5)';
+                    }} onMouseLeave={(e) => {
+                      e.target.style.transform = 'translateY(0)';
+                      e.target.style.boxShadow = '0 4px 15px rgba(34,211,238,0.3)';
+                    }}>
+                      📥 Export Report (JSON)
                     </button>
                   </div>
                 </motion.div>

@@ -387,3 +387,254 @@ export const getJobResults = asyncHandler(async (req, res) => {
     interpretation,
   });
 });
+
+/**
+ * Get full configuration snapshot for a specific backend
+ * Maps to: GET /api/backends/:backendName/details
+ */
+export const getBackendDetails = asyncHandler(async (req, res) => {
+  const { backendName } = req.params;
+  
+  if (!backendName) {
+    throw new ErrorResponse("Backend name is required.", 400);
+  }
+
+  try {
+    const runtime = await listRuntimeBackends({ minQubits: 1 });
+    const devices = runtime.devices || [];
+    
+    const backend = devices.find(
+      (dev) => dev.backend_name === backendName || dev.name === backendName
+    );
+
+    if (!backend) {
+      throw new ErrorResponse(`Backend '${backendName}' not found.`, 404);
+    }
+
+    // Extract essential keys only (memory optimization)
+    const details = {
+      name: backend.backend_name || backend.name,
+      status: backend.status || "unknown",
+      queue_length: backend.queue_length || 0,
+      num_qubits: backend.num_qubits || backend.qubits || 0,
+      supports_qasm: backend.supports_qasm !== false,
+      supports_dynamic_circuits: backend.supports_dynamic_circuits || false,
+      t1_times: backend.t1_times || [],
+      t2_times: backend.t2_times || [],
+      readout_error: backend.readout_error || 0,
+    };
+
+    res.status(200).json({
+      success: true,
+      data: details,
+    });
+  } catch (error) {
+    if (error.statusCode === 404) throw error;
+    throw new ErrorResponse(
+      error.message || "Failed to retrieve backend details.",
+      502
+    );
+  }
+});
+
+/**
+ * Get calibration data matrices (T1/T2 coherence times, readout errors)
+ * Maps to: GET /api/backends/:backendName/analytics
+ */
+export const getBackendAnalytics = asyncHandler(async (req, res) => {
+  const { backendName } = req.params;
+
+  if (!backendName) {
+    throw new ErrorResponse("Backend name is required.", 400);
+  }
+
+  try {
+    const runtime = await listRuntimeBackends({ minQubits: 1 });
+    const devices = runtime.devices || [];
+
+    const backend = devices.find(
+      (dev) => dev.backend_name === backendName || dev.name === backendName
+    );
+
+    if (!backend) {
+      throw new ErrorResponse(`Backend '${backendName}' not found.`, 404);
+    }
+
+    // Calculate error rates from coherence times
+    const t1Times = backend.t1_times || [];
+    const t2Times = backend.t2_times || [];
+
+    // Error rate = 1/T1 + 1/T2 (inverse of coherence times)
+    const errorRates = [];
+    for (let i = 0; i < Math.max(t1Times.length, t2Times.length); i++) {
+      const t1 = t1Times[i] || 1e-3;
+      const t2 = t2Times[i] || 1e-3;
+      const errorRate = (1 / Math.max(t1, 1e-6)) + (1 / Math.max(t2, 1e-6));
+      errorRates.push(errorRate);
+    }
+
+    const analytics = {
+      backend_name: backend.backend_name || backend.name,
+      num_qubits: backend.num_qubits || backend.qubits || 0,
+      queue_depth: backend.queue_length || 0,
+      t1_coherence_times: t1Times,
+      t2_coherence_times: t2Times,
+      calculated_error_rates: errorRates,
+      average_error_rate: errorRates.length > 0 
+        ? (errorRates.reduce((a, b) => a + b, 0) / errorRates.length).toFixed(6)
+        : 0,
+      readout_error: backend.readout_error || 0,
+      timestamp: new Date().toISOString(),
+    };
+
+    res.status(200).json({
+      success: true,
+      data: analytics,
+    });
+  } catch (error) {
+    if (error.statusCode === 404) throw error;
+    throw new ErrorResponse(
+      error.message || "Failed to retrieve backend analytics.",
+      502
+    );
+  }
+});
+
+/**
+ * Get historical snapshot trends of the job queue depth
+ * Maps to: GET /api/history?backend_name=<name>&limit=<num>
+ * Supports filtering by backend_name and limiting results
+ */
+export const getQueueHistory = asyncHandler(async (req, res) => {
+  try {
+    const { backend_name, limit = 100 } = req.query;
+    const limitNum = Math.min(Number(limit) || 100, 500); // Cap at 500
+
+    // Build query filter
+    const queryFilter = {};
+    if (backend_name) {
+      queryFilter.backend = backend_name;
+    }
+
+    // Fetch recent jobs to calculate historical queue trends
+    const recentJobs = await Job.find(queryFilter)
+      .sort({ createdAt: -1 })
+      .limit(limitNum)
+      .lean();
+
+    if (recentJobs.length === 0) {
+      return res.status(200).json({
+        success: true,
+        data: [],
+        message: backend_name ? `No jobs found for backend: ${backend_name}` : "No jobs found",
+      });
+    }
+
+    // Group by day and calculate queue metrics
+    const history = {};
+    recentJobs.forEach((job) => {
+      const day = new Date(job.createdAt).toISOString().split("T")[0];
+      if (!history[day]) {
+        history[day] = { count: 0, statuses: {}, backends: new Set() };
+      }
+      history[day].count += 1;
+      history[day].backends.add(job.backend);
+      history[day].statuses[job.status] =
+        (history[day].statuses[job.status] || 0) + 1;
+    });
+
+    const historyArray = Object.entries(history)
+      .sort(([a], [b]) => b.localeCompare(a)) // Reverse chronological
+      .map(([date, data]) => ({
+        date,
+        queue_length: data.count,
+        job_statuses: data.statuses,
+        backends_involved: Array.from(data.backends),
+      }));
+
+    res.status(200).json({
+      success: true,
+      ok: true,
+      data: historyArray,
+      backend_filter: backend_name || "all",
+      record_count: historyArray.length,
+    });
+  } catch (error) {
+    throw new ErrorResponse(
+      error.message || "Failed to retrieve queue history.",
+      500
+    );
+  }
+});
+
+/**
+ * Run median mathematical calculations to predict job wait time
+ * Maps to: GET /api/predict_wait?backend_name=<name>
+ * Supports filtering by specific backend or all backends
+ */
+export const getWaitPrediction = asyncHandler(async (req, res) => {
+  try {
+    const { backend_name } = req.query;
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    // Build query filter
+    const queryFilter = {
+      status: "completed",
+      createdAt: { $gte: sevenDaysAgo },
+    };
+    if (backend_name) {
+      queryFilter.backend = backend_name;
+    }
+
+    // Get recent completed jobs to calculate average wait time
+    const completedJobs = await Job.find(queryFilter).lean();
+
+    if (completedJobs.length === 0) {
+      return res.status(200).json({
+        success: true,
+        ok: true,
+        estimate_seconds: 300, // Default 5 minutes
+        sample_size: 0,
+        confidence: "low",
+        note: backend_name 
+          ? `No completed jobs for backend: ${backend_name} in last 7 days`
+          : "Insufficient historical data; using default estimate.",
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Calculate wait times (time from creation to completion)
+    const waitTimes = completedJobs
+      .map(
+        (job) =>
+          (new Date(job.updatedAt) - new Date(job.createdAt)) / 1000
+      )
+      .sort((a, b) => a - b);
+
+    // Calculate median, mean, and percentiles
+    const median = waitTimes[Math.floor(waitTimes.length / 2)];
+    const mean = waitTimes.reduce((a, b) => a + b, 0) / waitTimes.length;
+    const percentile95 = waitTimes[Math.floor(waitTimes.length * 0.95)];
+    const min = Math.min(...waitTimes);
+    const max = Math.max(...waitTimes);
+
+    res.status(200).json({
+      success: true,
+      ok: true,
+      estimate_seconds: Math.round(median),
+      mean_wait_seconds: Math.round(mean),
+      percentile_95_seconds: Math.round(percentile95),
+      min_seconds: Math.round(min),
+      max_seconds: Math.round(max),
+      sample_size: completedJobs.length,
+      confidence: completedJobs.length > 50 ? "high" : "medium",
+      backend_filter: backend_name || "all",
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    throw new ErrorResponse(
+      error.message || "Failed to predict wait time.",
+      500
+    );
+  }
+});

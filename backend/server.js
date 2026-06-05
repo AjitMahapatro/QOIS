@@ -36,6 +36,7 @@ import session from 'express-session';
 import authRoutes from './routes/authRoutes.js';
 import jobRoutes from './routes/jobRoutes.js';
 import backendRoutes from './routes/backendRoutes.js';
+import { getQueueHistory, getWaitPrediction } from './controllers/jobController.js';
 
 // --------------------------------------------------------
 // 5. Initialize Express Application
@@ -102,6 +103,10 @@ initializeSocketIO(server);
 app.use('/api/auth', authRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/backends', backendRoutes);
+
+// Register flat standalone metrics routes explicitly
+app.get('/api/history', getQueueHistory);
+app.get('/api/predict_wait', getWaitPrediction);
 
 // --------------------------------------------------------
 // 11. Basic Health Route

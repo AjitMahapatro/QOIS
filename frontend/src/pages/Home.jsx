@@ -221,7 +221,7 @@ const handleToggle = (mode) => {
             <div className="workflow-card">
               <div className="workflow-header">
                 <span className="wf-label">{isResearcher ? "QID DASHBOARD" : "QEE ENGINE"}</span>
-                <div class="blink-btn">LIVE</div>
+                <div className="blink-btn">LIVE</div>
               </div>
 
               <div className="workflow-steps">
@@ -295,9 +295,9 @@ const handleToggle = (mode) => {
 <span>
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
     <rect x="2" y="2" width="20" height="20" rx="6"
-          stroke="#C13584" stroke-width="2"/>
+          stroke="#C13584" strokeWidth="2"/>
     <circle cx="12" cy="12" r="5"
-            stroke="#C13584" stroke-width="2"/>
+            stroke="#C13584" strokeWidth="2"/>
     <circle cx="17.5" cy="6.5" r="1.2"
             fill="#C13584"/>
   </svg>
@@ -307,9 +307,9 @@ const handleToggle = (mode) => {
 <span>
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
     <rect x="3" y="5" width="18" height="14" rx="2"
-          stroke="#BB001B" stroke-width="2"/>
+          stroke="#BB001B" strokeWidth="2"/>
     <path d="M3 7l9 6 9-6"
-          stroke="#BB001B" stroke-width="2"/>
+          stroke="#BB001B" strokeWidth="2"/>
   </svg>
   Gmail
 </span>

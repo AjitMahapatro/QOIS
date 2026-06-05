@@ -7,6 +7,69 @@ import {
 
 const POLLING_INTERVAL = 10000;
 const MAX_RETRIES = 1;
+const MEMORY_THRESHOLD_MB = 150;
+
+/**
+ * Filter runtime payload to extract only essential keys.
+ * This prevents heavy JSON blobs from consuming memory.
+ */
+function filterRuntimePayload(payload) {
+  if (!payload) return null;
+
+  // Extract only essential keys for memory conservation
+  const filtered = {
+    status: payload.status || "unknown",
+    jobId: payload.jobId,
+    result: payload.result,
+    metrics: payload.metrics ? {
+      execution_time: payload.metrics.execution_time,
+      queue_time: payload.metrics.queue_time,
+    } : null,
+    usage: payload.usage ? {
+      quantum_seconds: payload.usage.quantum_seconds,
+    } : null,
+    reason: payload.reason,
+    errorMessage: payload.errorMessage,
+    logs: payload.logs ? payload.logs.substring(0, 5000) : "", // Cap log size
+    transpiledDepth: payload.transpiledDepth,
+    mode: payload.mode,
+    warnings: payload.warnings ? payload.warnings.slice(0, 5) : [], // Limit warnings array
+    suggestion: payload.suggestion,
+  };
+
+  return filtered;
+}
+
+/**
+ * Aggressive garbage collection: explicitly nullify heavy references.
+ * Called after critical job processing steps to keep memory below 150MB.
+ */
+function aggressiveGarbageCollection(references = []) {
+  // Nullify provided references
+  references.forEach((ref) => {
+    if (ref) {
+      Object.keys(ref).forEach((key) => {
+        ref[key] = null;
+      });
+    }
+  });
+
+  // Force garbage collection if available (v8.performGC requires --expose-gc flag)
+  if (global.gc) {
+    try {
+      global.gc();
+    } catch (e) {
+      // gc() not available, that's ok
+    }
+  }
+
+  // Log memory usage warning if threshold exceeded
+  if (process.memoryUsage().heapUsed / 1024 / 1024 > MEMORY_THRESHOLD_MB) {
+    console.warn(
+      `[MEMORY WARNING] Heap usage: ${(process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2)}MB`
+    );
+  }
+}
 
 function mapRuntimeStatus(status) {
   const normalized = String(status || "").toUpperCase();
@@ -25,13 +88,14 @@ async function retryOrFallback(job, reason, logs) {
     job.status = "failed";
     job.failureInfo = {
       reason: reason || "IBM Runtime returned an ERROR state.",
-      logs: logs || "",
+      logs: logs.substring(0, 2000) || "", // Limit log size
       suggestion:
         "Retry on a different backend or inspect the runtime logs for circuit issues.",
       backend: job.backend,
     };
     await job.save();
     emitJobUpdate("jobFailed", job);
+    aggressiveGarbageCollection([logs]);
     return;
   }
 
@@ -40,12 +104,15 @@ async function retryOrFallback(job, reason, logs) {
   try {
     const retry = await submitRuntimeJob({
       qasm: job.rawQASM,
-      backend: null,
+      backend: null, // Use IBM cloud simulator by default (not local Aer)
       shots: job.shots,
       circuitType: job.circuitType,
       allowFallback: true,
       excludeBackends: [job.backend].filter(Boolean),
     });
+
+    // Filter the retry payload to reduce memory footprint
+    const filteredRetry = filterRuntimePayload(retry);
 
     job.retryCount = retryAttempt;
     job.retryHistory = [
@@ -57,62 +124,65 @@ async function retryOrFallback(job, reason, logs) {
       },
     ];
 
-    if (retry.status === "completed" && retry.mode === "simulator") {
+    if (filteredRetry.status === "completed" && filteredRetry.mode === "simulator") {
       job.status = "completed";
       job.ibmJobId = null;
-      job.backend = retry.backend || "aer_simulator";
+      job.backend = filteredRetry.backend || "ibmq_qasm_simulator";
       job.runMode = "simulator";
-      job.ibmResult = retry.result;
-      job.transpiledDepth = retry.transpiledDepth ?? job.transpiledDepth;
+      job.ibmResult = filteredRetry.result;
+      job.transpiledDepth = filteredRetry.transpiledDepth ?? job.transpiledDepth;
       job.failureInfo = {
         reason,
-        logs: logs || retry.logs || "",
-        suggestion: retry.suggestion,
+        logs: filteredRetry.logs || "",
+        suggestion: filteredRetry.suggestion,
         fallbackUsed: true,
       };
       job.runtimeInfo = {
         ...(job.runtimeInfo || {}),
-        executionMode: retry.mode,
+        executionMode: filteredRetry.mode,
         lastStatus: "DONE",
-        warnings: retry.warnings || [],
+        warnings: filteredRetry.warnings || [],
       };
       await job.save();
       emitJobUpdate("jobCompleted", job);
+      aggressiveGarbageCollection([retry, filteredRetry]);
       return;
     }
 
-    job.ibmJobId = retry.jobId;
-    job.backend = retry.backend || job.backend;
-    job.status = mapRuntimeStatus(retry.status);
+    job.ibmJobId = filteredRetry.jobId;
+    job.backend = filteredRetry.backend || job.backend;
+    job.status = mapRuntimeStatus(filteredRetry.status);
     job.runMode = "hardware";
-    job.transpiledDepth = retry.transpiledDepth ?? job.transpiledDepth;
+    job.transpiledDepth = filteredRetry.transpiledDepth ?? job.transpiledDepth;
     job.failureInfo = {
       reason,
-      logs: logs || "",
+      logs: "",
       suggestion: "The job was retried automatically on a different backend.",
       retried: true,
     };
     job.runtimeInfo = {
       ...(job.runtimeInfo || {}),
-      executionMode: retry.mode,
-      lastStatus: retry.status,
-      warnings: retry.warnings || [],
-      backendSummary: retry.backendSummary || null,
+      executionMode: filteredRetry.mode,
+      lastStatus: filteredRetry.status,
+      warnings: filteredRetry.warnings || [],
+      backendSummary: null, // Omit heavy backendSummary
     };
     await job.save();
     emitJobUpdate("jobUpdated", job);
+    aggressiveGarbageCollection([retry, filteredRetry]);
   } catch (error) {
     job.status = "failed";
     job.retryCount = retryAttempt;
     job.failureInfo = {
       reason,
-      logs: logs || "",
+      logs: "",
       suggestion:
         "Automatic retry also failed. Inspect the runtime bridge error details.",
-      bridgeError: error.details?.traceback || error.message,
+      bridgeError: error.message ? error.message.substring(0, 500) : "",
     };
     await job.save();
     emitJobUpdate("jobFailed", job);
+    aggressiveGarbageCollection([error]);
   }
 }
 
@@ -136,30 +206,36 @@ const runJobWorker = async () => {
           qasm: job.rawQASM,
           shots: job.shots,
         });
-        const mappedStatus = mapRuntimeStatus(runtime.status);
+
+        // Filter runtime payload to reduce memory footprint
+        const filteredRuntime = filterRuntimePayload(runtime);
+        const mappedStatus = mapRuntimeStatus(filteredRuntime.status);
 
         job.runtimeInfo = {
           ...(job.runtimeInfo || {}),
-          lastStatus: runtime.status,
-          metrics: runtime.metrics || null,
-          usage: runtime.usage || null,
+          lastStatus: filteredRuntime.status,
+          metrics: filteredRuntime.metrics,
+          usage: filteredRuntime.usage,
         };
 
         if (mappedStatus === "completed") {
           job.status = "completed";
-          job.ibmResult = runtime.result || job.ibmResult;
+          job.ibmResult = filteredRuntime.result || job.ibmResult;
           job.failureInfo = null;
           await job.save();
           emitJobUpdate("jobCompleted", job);
+          // Clean up heavy runtime objects
+          aggressiveGarbageCollection([runtime, filteredRuntime]);
           continue;
         }
 
         if (mappedStatus === "failed" || mappedStatus === "cancelled") {
           await retryOrFallback(
             job,
-            runtime.reason || runtime.errorMessage || `Runtime ended in ${runtime.status}.`,
-            runtime.logs || ""
+            filteredRuntime.reason || filteredRuntime.errorMessage || `Runtime ended in ${filteredRuntime.status}.`,
+            filteredRuntime.logs || ""
           );
+          aggressiveGarbageCollection([runtime, filteredRuntime]);
           continue;
         }
 
@@ -170,12 +246,16 @@ const runJobWorker = async () => {
         } else {
           await job.save();
         }
+
+        // Clean up after processing
+        aggressiveGarbageCollection([runtime, filteredRuntime]);
       } catch (error) {
         await retryOrFallback(
           job,
           error.details?.error || error.message || "Runtime refresh failed.",
           error.details?.traceback || error.stderr || ""
         );
+        aggressiveGarbageCollection([error]);
       }
     }
   } catch (error) {
